@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useCourse } from '../context/CourseContext';
 import {
     Briefcase, Plus, Calendar, Users, CheckCircle, Clock,
     AlertCircle, X, ChevronRight
 } from 'lucide-react';
 
 /**
- * Workspaces Page
- * Lists all workspaces. Admins/Instructors can create new ones.
+ * Courses Page
+ * Lists all courses. Admins/Instructors can create new ones.
  */
-const Workspaces = () => {
+const Courses = () => {
     const { user, hasRole } = useAuth();
-    const { workspaces, createWorkspace } = useWorkspace();
+    const { courses, createCourse } = useCourse();
     const navigate = useNavigate();
 
     const [showCreate, setShowCreate] = useState(false);
@@ -26,7 +26,7 @@ const Workspaces = () => {
         if (!form.name.trim()) { setError('Name is required'); return; }
         if (!form.endDate) { setError('End date is required'); return; }
 
-        const result = createWorkspace({
+        const result = createCourse({
             name: form.name.trim(),
             endDate: form.endDate,
         });
@@ -48,9 +48,9 @@ const Workspaces = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Workspaces</h1>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Courses</h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-1">
-                        {canCreate ? 'Create and manage training workspaces' : 'View your assigned workspaces'}
+                        {canCreate ? 'Create and manage training courses' : 'View your assigned courses'}
                     </p>
                 </div>
                 {canCreate && (
@@ -59,53 +59,53 @@ const Workspaces = () => {
                         className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
                     >
                         <Plus className="w-4 h-4" />
-                        New Workspace
+                        New Course
                     </button>
                 )}
             </div>
 
-            {/* Workspace list */}
-            {workspaces.length === 0 ? (
+            {/* Course list */}
+            {courses.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-soft border border-gray-200 dark:border-gray-700 p-12 text-center">
                     <Briefcase size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-                    <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">No Workspaces Yet</h2>
+                    <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">No Courses Yet</h2>
                     <p className="text-gray-500 dark:text-gray-400">
-                        {canCreate ? 'Create your first workspace to get started.' : 'No workspaces have been assigned.'}
+                        {canCreate ? 'Create your first course to get started.' : 'No courses have been assigned.'}
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {workspaces.map((ws) => (
+                    {courses.map((course) => (
                         <button
-                            key={ws.id}
-                            onClick={() => navigate(`/workspaces/${ws.id}`)}
+                            key={course.id}
+                            onClick={() => navigate(`/courses/${course.id}`)}
                             className="bg-white dark:bg-gray-800 rounded-xl shadow-soft border border-gray-200 dark:border-gray-700 p-6 text-left hover:shadow-soft-lg transition-shadow group"
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
                                     <Briefcase size={24} className="text-primary-600 dark:text-primary-400" />
                                 </div>
-                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(ws.status)}`}>
-                                    {ws.status}
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(course.status)}`}>
+                                    {course.status}
                                 </span>
                             </div>
 
                             <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                                {ws.name}
+                                {course.name}
                             </h3>
 
                             <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
                                 <div className="flex items-center gap-2">
                                     <Calendar size={14} />
-                                    <span>Created: {ws.createdDate}</span>
+                                    <span>Created: {course.createdDate}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock size={14} />
-                                    <span>Ends: {ws.endDate}</span>
+                                    <span>Ends: {course.endDate}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Users size={14} />
-                                    <span>{ws.teams.length} team{ws.teams.length !== 1 ? 's' : ''}</span>
+                                    <span>{course.teams.length} team{course.teams.length !== 1 ? 's' : ''}</span>
                                 </div>
                             </div>
 
@@ -123,7 +123,7 @@ const Workspaces = () => {
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create Workspace</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create Course</h3>
                             <button onClick={() => setShowCreate(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
                                 <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                             </button>
@@ -136,7 +136,7 @@ const Workspaces = () => {
                                 </div>
                             )}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Workspace Name</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course Name</label>
                                 <input
                                     type="text"
                                     value={form.name}
@@ -176,4 +176,4 @@ const Workspaces = () => {
     );
 };
 
-export default Workspaces;
+export default Courses;

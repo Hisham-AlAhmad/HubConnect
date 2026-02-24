@@ -1,29 +1,29 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useCourse } from '../context/CourseContext';
 import ChatBox from '../components/ChatBox';
 import { MessageSquare, Users, Globe, Briefcase, Hash } from 'lucide-react';
 
 /**
  * Chat Page
- * Tabbed chat: General, Workspace-level, Team-level.
- * Respects internship isolation (filtered server-side in production).
+ * Tabbed chat: General, Course-level, Team-level.
+ * Respects cohort isolation (filtered server-side in production).
  */
 const Chat = () => {
   const { user } = useAuth();
-  const { activeWorkspace, getLeadingTeam } = useWorkspace();
+  const { activeCourse, getLeadingTeam } = useCourse();
   const [activeTab, setActiveTab] = useState('general');
 
   const tabs = [
     { id: 'general', label: 'General', icon: Globe },
-    { id: 'workspace', label: 'Workspace', icon: Briefcase },
+    { id: 'course', label: 'Course', icon: Briefcase },
     { id: 'team', label: 'Team', icon: Hash },
   ];
 
   // Resolve room IDs
   const getRoomId = () => {
     if (activeTab === 'general') return 'general';
-    if (activeTab === 'workspace' && activeWorkspace) return `ws_${activeWorkspace.id}`;
+    if (activeTab === 'course' && activeCourse) return `crs_${activeCourse.id}`;
     if (activeTab === 'team' && user.teamId) return `team_${user.teamId}`;
     return null;
   };
@@ -31,8 +31,8 @@ const Chat = () => {
   const roomId = getRoomId();
 
   const noRoomMessage = () => {
-    if (activeTab === 'workspace' && !activeWorkspace) {
-      return { title: 'No Active Workspace', desc: 'Join or create a workspace to use workspace chat.' };
+    if (activeTab === 'course' && !activeCourse) {
+      return { title: 'No Active Course', desc: 'Join or create a course to use course chat.' };
     }
     if (activeTab === 'team' && !user.teamId) {
       return { title: 'No Team Assigned', desc: 'You need to be part of a team to access team chat.' };
@@ -59,8 +59,8 @@ const Chat = () => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === tab.id
-                  ? 'bg-white dark:bg-gray-700 text-primary-700 dark:text-primary-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                ? 'bg-white dark:bg-gray-700 text-primary-700 dark:text-primary-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                 }`}
             >
               <Icon size={16} />

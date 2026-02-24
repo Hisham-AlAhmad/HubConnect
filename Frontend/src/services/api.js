@@ -85,9 +85,9 @@ export const analyticsAPI = {
   }),
 };
 
-//  WORKSPACE API 
+//  COURSE API 
 
-export const workspaceAPI = {
+export const courseAPI = {
   getAll: async () => ({ data: [] }),
   getById: async () => ({ data: null }),
   create: async () => ({ data: null }),
@@ -101,6 +101,18 @@ export const workspaceAPI = {
   getTasks: async () => ({ data: [] }),
   createTask: async () => ({ data: null }),
   updateTask: async () => ({ data: null }),
+};
+
+//  COHORT API 
+
+export const cohortAPI = {
+  getAll: async () => ({ data: [] }),
+  getById: async () => ({ data: null }),
+  create: async () => ({ data: null }),
+  update: async () => ({ data: null }),
+  delete: async () => ({ data: null }),
+  assignInstructor: async () => ({ data: null }),
+  removeInstructor: async () => ({ data: null }),
 };
 
 //  NOTIFICATION API 
@@ -121,6 +133,7 @@ const api = {
   reportsAPI,
   analyticsAPI,
   notificationAPI,
-  workspaceAPI,
+  courseAPI,
+  cohortAPI,
 };
 export default api;

@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Avatar from './Avatar';
 import {
@@ -12,114 +12,107 @@ import {
   Clock,
   FileText,
   GraduationCap,
-  Briefcase
+  Briefcase,
+  BookOpen,
+  Shield,
+  User,
 } from 'lucide-react';
 
 /**
  * Sidebar Component
- * Navigation sidebar with role-based menu items.
- * Fix: Create Task active-state no longer also highlights Tasks.
+ * Grouped navigation sidebar with role-based menu items.
+ *
+ * Groups:
+ *   • Overview          – Dashboard
+ *   • Academic          – Cohorts → Courses → Teams → Tasks (+ Create Task)
+ *   • Users             – Students, Instructors  (admin / instructor)
+ *   • Activity          – Check In/Out, Chat
+ *   • Reports & Insights– Daily Reports, Student Reports, Analytics
  */
 const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout, hasRole } = useAuth();
-  const location = useLocation();
 
-  // Navigation items based on role
-  const getNavItems = () => {
-    const items = [
-      {
-        name: 'Dashboard',
-        path: '/dashboard',
-        icon: LayoutDashboard,
-        roles: ['admin', 'instructor', 'student', 'team_leader'],
-      },
-      {
-        name: 'Tasks',
-        path: '/tasks',
-        icon: ListTodo,
-        roles: ['admin', 'instructor', 'student', 'team_leader'],
-        /** exact match — /tasks/create should NOT make this active */
-        end: true,
-      },
-    ];
+  /**
+   * Build grouped nav sections.
+   * Each section = { label, items[] }.  Items without matching role are filtered out.
+   */
+  const getSections = () => {
+    const sections = [];
 
-    // Create Task for instructors and admins
-    if (hasRole(['instructor', 'admin'])) {
-      items.push({
-        name: 'Create Task',
-        path: '/tasks/create',
-        icon: PlusCircle,
-        roles: ['instructor', 'admin'],
-      });
+    /* ── Overview ──────────────────────────────────────────── */
+    sections.push({
+      label: null, // no heading for top-level dashboard
+      items: [
+        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'instructor', 'student', 'team_leader'] },
+      ],
+    });
+
+    /* ── Academic ──────────────────────────────────────────── */
+    const academicItems = [];
+
+    // Cohorts – admin & instructor
+    if (hasRole(['admin', 'instructor'])) {
+      academicItems.push({ name: 'Cohorts', path: '/cohorts', icon: GraduationCap, roles: ['admin', 'instructor'] });
     }
 
-    // Workspaces — admins, instructors, and team leaders can view
-    items.push({
-      name: 'Workspaces',
-      path: '/workspaces',
-      icon: Briefcase,
-      roles: ['admin', 'instructor', 'student', 'team_leader'],
-    });
+    academicItems.push(
+      { name: 'Courses', path: '/courses', icon: BookOpen, roles: ['admin', 'instructor', 'student', 'team_leader'] },
+      { name: 'Teams', path: '/teams', icon: Users, roles: ['admin', 'instructor', 'student', 'team_leader'] },
+      { name: 'Tasks', path: '/tasks', icon: ListTodo, roles: ['admin', 'instructor', 'student', 'team_leader'], end: true },
+    );
 
-    items.push({
-      name: 'Teams',
-      path: '/teams',
-      icon: Users,
-      roles: ['admin', 'instructor', 'student', 'team_leader'],
-    });
+    // Create Task – admin, instructor, AND team_leader
+    if (hasRole(['admin', 'instructor', 'team_leader'])) {
+      academicItems.push({ name: 'Create Task', path: '/tasks/create', icon: PlusCircle, roles: ['admin', 'instructor', 'team_leader'] });
+    }
 
-    // Check In/Out for students and team leaders
+    sections.push({ label: 'Academic', items: academicItems });
+
+    /* ── Users ─────────────────────────────────────────────── */
+    if (hasRole(['admin', 'instructor'])) {
+      const userItems = [
+        { name: 'Students', path: '/students', icon: User, roles: ['admin', 'instructor'] },
+      ];
+      // Only admin sees the Instructors list
+      if (hasRole('admin')) {
+        userItems.push({ name: 'Instructors', path: '/instructors', icon: Shield, roles: ['admin'] });
+      }
+      sections.push({ label: 'Users', items: userItems });
+    }
+
+    /* ── Activity ──────────────────────────────────────────── */
+    const activityItems = [];
+
     if (hasRole(['student', 'team_leader'])) {
-      items.push({
-        name: 'Check In/Out',
-        path: '/attendance',
-        icon: Clock,
-        roles: ['student', 'team_leader'],
+      activityItems.push({ name: 'Check In/Out', path: '/attendance', icon: Clock, roles: ['student', 'team_leader'] });
+    }
+
+    activityItems.push({ name: 'Chat', path: '/chat', icon: MessageSquare, roles: ['admin', 'instructor', 'student', 'team_leader'] });
+
+    sections.push({ label: 'Activity', items: activityItems });
+
+    /* ── Reports & Insights ────────────────────────────────── */
+    if (hasRole(['admin', 'instructor'])) {
+      sections.push({
+        label: 'Reports',
+        items: [
+          { name: 'Daily Reports', path: '/reports/daily', icon: FileText, roles: ['admin', 'instructor'] },
+          { name: 'Student Reports', path: '/reports/student', icon: GraduationCap, roles: ['admin', 'instructor'] },
+          { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'instructor'] },
+        ],
       });
     }
 
-    // Chat for all roles that have access
-    items.push({
-      name: 'Chat',
-      path: '/chat',
-      icon: MessageSquare,
-      roles: ['admin', 'instructor', 'student', 'team_leader'],
-    });
-
-    // Daily Reports
-    if (hasRole(['instructor', 'admin'])) {
-      items.push({
-        name: 'Daily Reports',
-        path: '/reports/daily',
-        icon: FileText,
-        roles: ['instructor', 'admin'],
-      });
-    }
-
-    // Student Reports
-    if (hasRole(['instructor', 'admin'])) {
-      items.push({
-        name: 'Student Reports',
-        path: '/reports/student',
-        icon: GraduationCap,
-        roles: ['instructor', 'admin'],
-      });
-    }
-
-    // Analytics
-    if (hasRole(['instructor', 'admin'])) {
-      items.push({
-        name: 'Analytics',
-        path: '/analytics',
-        icon: BarChart3,
-        roles: ['instructor', 'admin'],
-      });
-    }
-
-    return items.filter((item) => item.roles.includes(user?.role));
+    // Filter items within each section by current user role
+    return sections
+      .map((s) => ({
+        ...s,
+        items: s.items.filter((i) => i.roles.includes(user?.role)),
+      }))
+      .filter((s) => s.items.length > 0);
   };
 
-  const navItems = getNavItems();
+  const sections = getSections();
 
   const handleLogout = () => {
     logout();
@@ -153,7 +146,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </div>
 
           {/* User info */}
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center space-x-3">
               <Avatar name={user?.name || 'U'} imageUrl={user?.avatarUrl} size={40} role={user?.role} />
               <div className="flex-1 min-w-0">
@@ -167,40 +160,49 @@ const Sidebar = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4">
-            <ul className="space-y-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <li key={item.path}>
-                    <NavLink
-                      to={item.path}
-                      end={item.end || false}
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        `flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${isActive
-                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
-                          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`
-                      }
-                    >
-                      <Icon size={20} />
-                      <span>{item.name}</span>
-                    </NavLink>
-                  </li>
-                );
-              })}
-            </ul>
+          {/* Navigation — grouped sections */}
+          <nav className="flex-1 overflow-y-auto px-3 py-3">
+            {sections.map((section, sIdx) => (
+              <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
+                {section.label && (
+                  <p className="px-3 mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                    {section.label}
+                  </p>
+                )}
+                <ul className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.path}>
+                        <NavLink
+                          to={item.path}
+                          end={item.end || false}
+                          onClick={onClose}
+                          className={({ isActive }) =>
+                            `flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-[13px] ${isActive
+                              ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`
+                          }
+                        >
+                          <Icon size={18} />
+                          <span>{item.name}</span>
+                        </NavLink>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </nav>
 
           {/* Logout button */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700">
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-3 px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 w-full transition-colors"
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 w-full transition-colors text-[13px]"
             >
-              <LogOut size={20} />
+              <LogOut size={18} />
               <span>Logout</span>
             </button>
           </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useCourse } from '../context/CourseContext';
 import Avatar from '../components/Avatar';
 import {
     ArrowLeft, Briefcase, Users, Calendar, Clock, Plus, Crown, UserPlus,
@@ -10,21 +10,21 @@ import {
 } from 'lucide-react';
 
 /**
- * WorkspaceDetails Page
- * Shows teams in a workspace, submission metadata, team leader assignment.
+ * CourseDetails Page
+ * Shows teams in a course, submission metadata, team leader assignment.
  */
-const WorkspaceDetails = () => {
+const CourseDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user, hasRole } = useAuth();
     const {
-        workspaces, addTeamToWorkspace, assignTeamLeader,
-        addMemberToTeam, removeMemberFromTeam, finishWorkspace,
-        isTeamLeaderInWorkspace, getLeadingTeam,
-        addTaskToWorkspace, updateTaskInWorkspace,
-    } = useWorkspace();
+        courses, addTeamToCourse, assignTeamLeader,
+        addMemberToTeam, removeMemberFromTeam, finishCourse,
+        isTeamLeaderInCourse, getLeadingTeam,
+        addTaskToCourse, updateTaskInCourse,
+    } = useCourse();
 
-    const ws = workspaces.find((w) => w.id === id);
+    const course = courses.find((c) => c.id === id);
 
     const [showAddTeam, setShowAddTeam] = useState(false);
     const [teamName, setTeamName] = useState('');
@@ -37,16 +37,16 @@ const WorkspaceDetails = () => {
     const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'medium' });
 
     const canManage = hasRole(['admin', 'instructor']);
-    const isLeader = ws ? isTeamLeaderInWorkspace(ws.id) : false;
-    const leadingTeam = ws ? getLeadingTeam(ws.id) : null;
+    const isLeader = course ? isTeamLeaderInCourse(course.id) : false;
+    const leadingTeam = course ? getLeadingTeam(course.id) : null;
 
-    if (!ws) {
+    if (!course) {
         return (
             <div className="text-center py-12">
                 <Briefcase size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-                <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Workspace not found</h2>
-                <button onClick={() => navigate('/workspaces')} className="mt-4 text-primary-600 hover:underline text-sm">
-                    Back to Workspaces
+                <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Course not found</h2>
+                <button onClick={() => navigate('/courses')} className="mt-4 text-primary-600 hover:underline text-sm">
+                    Back to Courses
                 </button>
             </div>
         );
@@ -54,7 +54,7 @@ const WorkspaceDetails = () => {
 
     const handleAddTeam = () => {
         if (!teamName.trim()) return;
-        addTeamToWorkspace(ws.id, { name: teamName.trim() });
+        addTeamToCourse(course.id, { name: teamName.trim() });
         setTeamName('');
         setShowAddTeam(false);
         setSuccess('Team added!');
@@ -62,25 +62,25 @@ const WorkspaceDetails = () => {
     };
 
     const handleAssignLeader = (teamId, studentId) => {
-        assignTeamLeader(ws.id, teamId, studentId);
+        assignTeamLeader(course.id, teamId, studentId);
         setSuccess('Team leader assigned!');
         setTimeout(() => setSuccess(''), 3000);
     };
 
     const handleAddMember = (teamId, studentId) => {
-        // Check student is not already in another team in this workspace
-        const alreadyIn = ws.teams.some((t) => t.members.includes(studentId));
+        // Check student is not already in another team in this course
+        const alreadyIn = course.teams.some((t) => t.members.includes(studentId));
         if (alreadyIn) {
-            setError('This student is already in a team in this workspace.');
+            setError('This student is already in a team in this course.');
             setTimeout(() => setError(''), 4000);
             return;
         }
-        addMemberToTeam(ws.id, teamId, studentId);
+        addMemberToTeam(course.id, teamId, studentId);
     };
 
     const handleCreateTask = () => {
         if (!taskForm.title.trim()) { setError('Task title is required'); return; }
-        addTaskToWorkspace(ws.id, {
+        addTaskToCourse(course.id, {
             title: taskForm.title.trim(),
             description: taskForm.description.trim(),
             priority: taskForm.priority,
@@ -117,17 +117,17 @@ const WorkspaceDetails = () => {
         return map[s] || map.todo;
     };
 
-    // Filter tasks for this workspace (team-leader sees only their team)
+    // Filter tasks for this course (team-leader sees only their team)
     const visibleTasks = isLeader && leadingTeam
-        ? ws.tasks.filter((t) => t.assignedTeamId === leadingTeam.id)
-        : ws.tasks;
+        ? course.tasks.filter((t) => t.assignedTeamId === leadingTeam.id)
+        : course.tasks;
 
     return (
         <div className="space-y-6">
             {/* Header */}
             <div>
-                <button onClick={() => navigate('/workspaces')} className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 mb-4 text-sm">
-                    <ArrowLeft size={16} /> Back to Workspaces
+                <button onClick={() => navigate('/courses')} className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 mb-4 text-sm">
+                    <ArrowLeft size={16} /> Back to Courses
                 </button>
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4">
@@ -135,16 +135,16 @@ const WorkspaceDetails = () => {
                             <Briefcase size={28} className="text-primary-600 dark:text-primary-400" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{ws.name}</h1>
+                            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{course.name}</h1>
                             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(ws.status)}`}>{ws.status}</span>
-                                <span className="flex items-center gap-1"><Calendar size={14} /> Created: {ws.createdDate}</span>
-                                <span className="flex items-center gap-1"><Clock size={14} /> Ends: {ws.endDate}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(course.status)}`}>{course.status}</span>
+                                <span className="flex items-center gap-1"><Calendar size={14} /> Created: {course.createdDate}</span>
+                                <span className="flex items-center gap-1"><Clock size={14} /> Ends: {course.endDate}</span>
                             </div>
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        {canManage && ws.status === 'active' && (
+                        {canManage && course.status === 'active' && (
                             <>
                                 <button
                                     onClick={() => setShowAddTeam(true)}
@@ -153,14 +153,14 @@ const WorkspaceDetails = () => {
                                     <Plus size={16} /> Add Team
                                 </button>
                                 <button
-                                    onClick={() => finishWorkspace(ws.id)}
+                                    onClick={() => finishCourse(course.id)}
                                     className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
                                 >
                                     <CheckCircle size={16} /> Mark Finished
                                 </button>
                             </>
                         )}
-                        {isLeader && ws.status === 'active' && (
+                        {isLeader && course.status === 'active' && (
                             <button
                                 onClick={() => setShowTaskForm(true)}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
@@ -187,16 +187,16 @@ const WorkspaceDetails = () => {
             {/* Teams */}
             <div>
                 <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                    <Users size={20} /> Teams ({ws.teams.length})
+                    <Users size={20} /> Teams ({course.teams.length})
                 </h2>
-                {ws.teams.length === 0 ? (
+                {course.teams.length === 0 ? (
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
                         <Users size={36} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
                         <p className="text-gray-500 dark:text-gray-400 text-sm">No teams yet. {canManage ? 'Add a team to get started.' : ''}</p>
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {ws.teams.map((team) => (
+                        {course.teams.map((team) => (
                             <div key={team.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                                 <button
                                     onClick={() => setExpandedTeam(expandedTeam === team.id ? null : team.id)}
@@ -255,7 +255,7 @@ const WorkspaceDetails = () => {
                                                             )}
                                                             {canManage && (
                                                                 <button
-                                                                    onClick={() => removeMemberFromTeam(ws.id, team.id, memberId)}
+                                                                    onClick={() => removeMemberFromTeam(course.id, team.id, memberId)}
                                                                     className="text-xs px-2 py-1 rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
                                                                     title="Remove member"
                                                                 >
@@ -287,7 +287,7 @@ const WorkspaceDetails = () => {
                 )}
             </div>
 
-            {/* Workspace Tasks (team-leader created) */}
+            {/* Course Tasks (team-leader created) */}
             {(visibleTasks.length > 0 || isLeader) && (
                 <div>
                     <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
@@ -318,7 +318,7 @@ const WorkspaceDetails = () => {
                                         {(isLeader || canManage) && (
                                             <select
                                                 value={task.status}
-                                                onChange={(e) => updateTaskInWorkspace(ws.id, task.id, { status: e.target.value })}
+                                                onChange={(e) => updateTaskInCourse(course.id, task.id, { status: e.target.value })}
                                                 className="text-xs border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                                             >
                                                 <option value="todo">To Do</option>
@@ -418,4 +418,4 @@ const WorkspaceDetails = () => {
     );
 };
 
-export default WorkspaceDetails;
+export default CourseDetails;

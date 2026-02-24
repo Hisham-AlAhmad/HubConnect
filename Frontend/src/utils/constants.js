@@ -59,7 +59,10 @@ export const ROUTES = {
   CHECK_IN_OUT: '/attendance',
   DAILY_REPORTS: '/reports/daily',
   STUDENT_REPORT: '/reports/student/:id',
-  WORKSPACES: '/workspaces',
-  WORKSPACE_DETAILS: '/workspaces/:id',
+  COHORTS: '/cohorts',
+  COURSES: '/courses',
+  COURSE_DETAILS: '/courses/:id',
+  STUDENTS: '/students',
+  INSTRUCTORS: '/instructors',
   PROFILE: '/profile'
 };

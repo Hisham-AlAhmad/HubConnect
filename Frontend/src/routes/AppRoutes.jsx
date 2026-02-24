@@ -17,8 +17,11 @@ import CheckInOut from '../pages/CheckInOut';
 import DailyReports from '../pages/DailyReports';
 import StudentReport from '../pages/StudentReport';
 import Profile from '../pages/Profile';
-import Workspaces from '../pages/Workspaces';
-import WorkspaceDetails from '../pages/WorkspaceDetails';
+import Courses from '../pages/Courses';
+import CourseDetails from '../pages/CourseDetails';
+import Cohorts from '../pages/Cohorts';
+import Students from '../pages/Students';
+import Instructors from '../pages/Instructors';
 import NotFound from '../pages/NotFound';
 
 // Component
@@ -68,11 +71,11 @@ const AppRoutes = () => {
         {/* Tasks - All authenticated users */}
         <Route path="tasks" element={<Tasks />} />
 
-        {/* Create Task - Instructor and Admin only */}
+        {/* Create Task - Instructor, Admin, and Team Leader */}
         <Route
           path="tasks/create"
           element={
-            <RoleGuard allowedRoles={['instructor', 'admin']}>
+            <RoleGuard allowedRoles={['instructor', 'admin', 'team_leader']}>
               <CreateTask />
             </RoleGuard>
           }
@@ -87,9 +90,39 @@ const AppRoutes = () => {
         {/* Teams - All authenticated users */}
         <Route path="teams" element={<Teams />} />
 
-        {/* Workspaces - All authenticated users */}
-        <Route path="workspaces" element={<Workspaces />} />
-        <Route path="workspaces/:id" element={<WorkspaceDetails />} />
+        {/* Cohorts - Admin and Instructor */}
+        <Route
+          path="cohorts"
+          element={
+            <RoleGuard allowedRoles={['admin', 'instructor']}>
+              <Cohorts />
+            </RoleGuard>
+          }
+        />
+
+        {/* Courses - All authenticated users */}
+        <Route path="courses" element={<Courses />} />
+        <Route path="courses/:id" element={<CourseDetails />} />
+
+        {/* Students - Admin and Instructor */}
+        <Route
+          path="students"
+          element={
+            <RoleGuard allowedRoles={['admin', 'instructor']}>
+              <Students />
+            </RoleGuard>
+          }
+        />
+
+        {/* Instructors - Admin only */}
+        <Route
+          path="instructors"
+          element={
+            <RoleGuard allowedRoles={['admin']}>
+              <Instructors />
+            </RoleGuard>
+          }
+        />
 
         {/* Check In/Out - Students and Team Leaders */}
         <Route

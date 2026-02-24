@@ -1,8 +1,8 @@
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { InternshipProvider } from './context/InternshipContext';
-import { WorkspaceProvider } from './context/WorkspaceContext';
+import { CohortProvider } from './context/CohortContext';
+import { CourseProvider } from './context/CourseContext';
 import AppRoutes from './routes/AppRoutes';
 
 /**
@@ -14,11 +14,11 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
-          <InternshipProvider>
-            <WorkspaceProvider>
+          <CohortProvider>
+            <CourseProvider>
               <AppRoutes />
-            </WorkspaceProvider>
-          </InternshipProvider>
+            </CourseProvider>
+          </CohortProvider>
         </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
