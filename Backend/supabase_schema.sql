@@ -8,11 +8,11 @@
 -- ============================================
 
 CREATE TYPE user_role_type AS ENUM ('admin', 'instructor', 'student', 'team_leader');
-CREATE TYPE workspace_status AS ENUM ('active', 'archived', 'completed');
+CREATE TYPE course_status AS ENUM ('active', 'archived', 'completed');
 CREATE TYPE task_status AS ENUM ('pending', 'in_progress', 'submitted', 'accepted', 'rejected');
 CREATE TYPE task_priority AS ENUM ('low', 'medium', 'high');
 CREATE TYPE submission_status AS ENUM ('pending', 'submitted', 'accepted', 'rejected', 'revision_requested');
-CREATE TYPE notification_type AS ENUM ('task_assigned', 'task_submitted', 'task_accepted', 'task_rejected', 'team_member_added', 'workspace_created', 'comment_added', 'message_received');
+CREATE TYPE notification_type AS ENUM ('task_assigned', 'task_submitted', 'task_accepted', 'task_rejected', 'team_member_added', 'course_created', 'comment_added', 'message_received');
 CREATE TYPE notification_status AS ENUM ('unread', 'read', 'archived');
 CREATE TYPE activity_action AS ENUM ('create', 'update', 'delete', 'restore', 'submit', 'accept', 'reject');
 
@@ -151,10 +151,10 @@ CREATE INDEX idx_user_roles_org_user ON user_roles(organization_id, user_id);
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 
 -- ============================================
--- 6. INTERNSHIPS / SEMESTERS
+-- 6. COHORTS
 -- ============================================
 
-CREATE TABLE internships (
+CREATE TABLE cohorts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -173,15 +173,16 @@ CREATE TABLE internships (
     CONSTRAINT valid_dates CHECK (start_date < end_date)
 );
 
-CREATE INDEX idx_internships_org_id ON internships(organization_id);
-CREATE INDEX idx_internships_is_active ON internships(is_active);
-CREATE INDEX idx_internships_date_range ON internships(start_date, end_date);
+CREATE INDEX idx_cohorts_org_id ON cohorts(organization_id);
+CREATE INDEX idx_cohorts_is_active ON cohorts(is_active);
+CREATE INDEX idx_cohorts_date_range ON cohorts(start_date, end_date);
 
-CREATE TABLE user_internships (
+CREATE TABLE user_cohorts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    internship_id UUID NOT NULL REFERENCES internships(id) ON DELETE CASCADE,
+    cohort_id UUID NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+    role VARCHAR(50) DEFAULT 'student',
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -190,22 +191,23 @@ CREATE TABLE user_internships (
     updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     deleted_at TIMESTAMP WITH TIME ZONE,
     
-    UNIQUE(organization_id, user_id, internship_id)
+    UNIQUE(organization_id, user_id, cohort_id)
 );
 
-CREATE INDEX idx_user_internships_org_user ON user_internships(organization_id, user_id);
-CREATE INDEX idx_user_internships_internship_id ON user_internships(internship_id);
+CREATE INDEX idx_user_cohorts_org_user ON user_cohorts(organization_id, user_id);
+CREATE INDEX idx_user_cohorts_cohort_id ON user_cohorts(cohort_id);
 
 -- ============================================
--- 7. WORKSPACES
+-- 7. COURSES
 -- ============================================
 
-CREATE TABLE workspaces (
+CREATE TABLE courses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    cohort_id UUID NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    status workspace_status DEFAULT 'active',
+    status course_status DEFAULT 'active',
     start_date DATE DEFAULT CURRENT_DATE,
     end_date DATE,
     max_team_leaders INT DEFAULT 5,
@@ -216,13 +218,14 @@ CREATE TABLE workspaces (
     updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     deleted_at TIMESTAMP WITH TIME ZONE,
     
-    CONSTRAINT valid_workspace_dates CHECK (COALESCE(end_date, CURRENT_DATE) >= start_date)
+    CONSTRAINT valid_course_dates CHECK (COALESCE(end_date, CURRENT_DATE) >= start_date)
 );
 
-CREATE INDEX idx_workspaces_org_id ON workspaces(organization_id);
-CREATE INDEX idx_workspaces_status ON workspaces(status);
-CREATE INDEX idx_workspaces_created_at ON workspaces(created_at DESC);
-CREATE INDEX idx_workspaces_org_status ON workspaces(organization_id, status);
+CREATE INDEX idx_courses_org_id ON courses(organization_id);
+CREATE INDEX idx_courses_cohort_id ON courses(cohort_id);
+CREATE INDEX idx_courses_status ON courses(status);
+CREATE INDEX idx_courses_created_at ON courses(created_at DESC);
+CREATE INDEX idx_courses_org_status ON courses(organization_id, status);
 
 -- ============================================
 -- 8. TEAMS
@@ -231,7 +234,7 @@ CREATE INDEX idx_workspaces_org_status ON workspaces(organization_id, status);
 CREATE TABLE teams (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     team_leader_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -244,13 +247,13 @@ CREATE TABLE teams (
     updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     deleted_at TIMESTAMP WITH TIME ZONE,
     
-    UNIQUE(workspace_id, name)
+    UNIQUE(course_id, name)
 );
 
 CREATE INDEX idx_teams_org_id ON teams(organization_id);
-CREATE INDEX idx_teams_workspace_id ON teams(workspace_id);
+CREATE INDEX idx_teams_course_id ON teams(course_id);
 CREATE INDEX idx_teams_team_leader_id ON teams(team_leader_id);
-CREATE INDEX idx_teams_org_workspace ON teams(organization_id, workspace_id);
+CREATE INDEX idx_teams_org_course ON teams(organization_id, course_id);
 
 CREATE TABLE team_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -281,7 +284,7 @@ CREATE INDEX idx_team_members_role ON team_members(role);
 CREATE TABLE tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
     title VARCHAR(300) NOT NULL,
     description TEXT,
@@ -301,13 +304,13 @@ CREATE TABLE tasks (
 );
 
 CREATE INDEX idx_tasks_org_id ON tasks(organization_id);
-CREATE INDEX idx_tasks_workspace_id ON tasks(workspace_id);
+CREATE INDEX idx_tasks_course_id ON tasks(course_id);
 CREATE INDEX idx_tasks_team_id ON tasks(team_id);
 CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_tasks_assignee_id ON tasks(assignee_id);
 CREATE INDEX idx_tasks_due_date ON tasks(due_date);
-CREATE INDEX idx_tasks_org_workspace ON tasks(organization_id, workspace_id);
-CREATE INDEX idx_tasks_workspace_status ON tasks(workspace_id, status);
+CREATE INDEX idx_tasks_org_course ON tasks(organization_id, course_id);
+CREATE INDEX idx_tasks_course_status ON tasks(course_id, status);
 
 CREATE TABLE task_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -390,7 +393,7 @@ CREATE TABLE chat_rooms (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     room_name VARCHAR(255) NOT NULL,
     room_type VARCHAR(50) NOT NULL,
-    workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL,
+    course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
     team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -398,16 +401,16 @@ CREATE TABLE chat_rooms (
     updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     deleted_at TIMESTAMP WITH TIME ZONE,
     
-    CONSTRAINT valid_room_type CHECK (room_type IN ('general', 'workspace', 'team')),
+    CONSTRAINT valid_room_type CHECK (room_type IN ('general', 'course', 'team')),
     CONSTRAINT room_context CHECK (
-        (room_type = 'general' AND workspace_id IS NULL AND team_id IS NULL) OR
-        (room_type = 'workspace' AND workspace_id IS NOT NULL AND team_id IS NULL) OR
-        (room_type = 'team' AND workspace_id IS NOT NULL AND team_id IS NOT NULL)
+        (room_type = 'general' AND course_id IS NULL AND team_id IS NULL) OR
+        (room_type = 'course' AND course_id IS NOT NULL AND team_id IS NULL) OR
+        (room_type = 'team' AND course_id IS NOT NULL AND team_id IS NOT NULL)
     )
 );
 
 CREATE INDEX idx_chat_rooms_org_id ON chat_rooms(organization_id);
-CREATE INDEX idx_chat_rooms_workspace_id ON chat_rooms(workspace_id);
+CREATE INDEX idx_chat_rooms_course_id ON chat_rooms(course_id);
 CREATE INDEX idx_chat_rooms_team_id ON chat_rooms(team_id);
 CREATE INDEX idx_chat_rooms_room_type ON chat_rooms(room_type);
 
@@ -494,10 +497,9 @@ CREATE TABLE activity_logs (
     ip_address INET,
     user_agent TEXT,
     metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    COMMENT ON COLUMN activity_logs.changes IS 'JSON object showing before/after field values: {"field_name": {"old": value, "new": value}}'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+COMMENT ON COLUMN activity_logs.changes IS $$JSON object showing before/after field values:{"field_name": {"old": value, "new": value}}$$;
 
 CREATE INDEX idx_activity_logs_org_id ON activity_logs(organization_id);
 CREATE INDEX idx_activity_logs_actor_id ON activity_logs(actor_id);
@@ -543,7 +545,7 @@ CREATE TABLE task_analytics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     snapshot_date DATE DEFAULT CURRENT_DATE,
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     total_tasks INT DEFAULT 0,
     completed_tasks INT DEFAULT 0,
     submitted_tasks INT DEFAULT 0,
@@ -553,11 +555,11 @@ CREATE TABLE task_analytics (
     team_performance JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
-    UNIQUE(organization_id, workspace_id, snapshot_date)
+    UNIQUE(organization_id, course_id, snapshot_date)
 );
 
 CREATE INDEX idx_task_analytics_org_id ON task_analytics(organization_id);
-CREATE INDEX idx_task_analytics_workspace_id ON task_analytics(workspace_id);
+CREATE INDEX idx_task_analytics_course_id ON task_analytics(course_id);
 CREATE INDEX idx_task_analytics_snapshot_date ON task_analytics(snapshot_date DESC);
 
 -- ============================================
@@ -652,13 +654,13 @@ CREATE TRIGGER update_roles_updated_at BEFORE UPDATE ON roles
 CREATE TRIGGER update_user_roles_updated_at BEFORE UPDATE ON user_roles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_internships_updated_at BEFORE UPDATE ON internships
+CREATE TRIGGER update_cohorts_updated_at BEFORE UPDATE ON cohorts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_user_internships_updated_at BEFORE UPDATE ON user_internships
+CREATE TRIGGER update_user_cohorts_updated_at BEFORE UPDATE ON user_cohorts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_workspaces_updated_at BEFORE UPDATE ON workspaces
+CREATE TRIGGER update_courses_updated_at BEFORE UPDATE ON courses
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_teams_updated_at BEFORE UPDATE ON teams
@@ -704,13 +706,13 @@ CREATE TRIGGER set_roles_created_by BEFORE INSERT ON roles
 CREATE TRIGGER set_user_roles_created_by BEFORE INSERT ON user_roles
     FOR EACH ROW EXECUTE FUNCTION set_created_by();
 
-CREATE TRIGGER set_internships_created_by BEFORE INSERT ON internships
+CREATE TRIGGER set_cohorts_created_by BEFORE INSERT ON cohorts
     FOR EACH ROW EXECUTE FUNCTION set_created_by();
 
-CREATE TRIGGER set_user_internships_created_by BEFORE INSERT ON user_internships
+CREATE TRIGGER set_user_cohorts_created_by BEFORE INSERT ON user_cohorts
     FOR EACH ROW EXECUTE FUNCTION set_created_by();
 
-CREATE TRIGGER set_workspaces_created_by BEFORE INSERT ON workspaces
+CREATE TRIGGER set_courses_created_by BEFORE INSERT ON courses
     FOR EACH ROW EXECUTE FUNCTION set_created_by();
 
 CREATE TRIGGER set_teams_created_by BEFORE INSERT ON teams
@@ -755,9 +757,9 @@ ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE internships ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_internships ENABLE ROW LEVEL SECURITY;
-ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cohorts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_cohorts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
@@ -830,35 +832,35 @@ CREATE POLICY "Admins can manage organization users" ON organization_users
     );
 
 -- ============================================
--- POLICIES: WORKSPACES
+-- POLICIES: COURSES
 -- ============================================
 
--- Users can view workspaces they belong to
-CREATE POLICY "Users can view their workspaces" ON workspaces
+-- Users can view courses they belong to
+CREATE POLICY "Users can view their courses" ON courses
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM organization_users
-            WHERE organization_users.organization_id = workspaces.organization_id
+            WHERE organization_users.organization_id = courses.organization_id
             AND organization_users.user_id = auth.uid()
         )
     );
 
--- Team leaders can view their workspaces
-CREATE POLICY "Team leaders can view assigned workspaces" ON workspaces
+-- Team leaders can view their courses
+CREATE POLICY "Team leaders can view assigned courses" ON courses
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM teams
-            WHERE teams.workspace_id = workspaces.id
+            WHERE teams.course_id = courses.id
             AND teams.team_leader_id = auth.uid()
         )
     );
 
--- Only admins and instructors can create workspaces
-CREATE POLICY "Only admins and instructors can create workspaces" ON workspaces
+-- Only admins and instructors can create courses
+CREATE POLICY "Only admins and instructors can create courses" ON courses
     FOR INSERT WITH CHECK (
         EXISTS (
             SELECT 1 FROM user_roles
-            WHERE user_roles.organization_id = workspaces.organization_id
+            WHERE user_roles.organization_id = courses.organization_id
             AND user_roles.user_id = auth.uid()
             AND user_roles.role_id IN (
                 SELECT id FROM roles WHERE name IN ('admin', 'instructor')
@@ -866,12 +868,12 @@ CREATE POLICY "Only admins and instructors can create workspaces" ON workspaces
         )
     );
 
--- Only admins and instructors can update/delete workspaces
-CREATE POLICY "Only admins and instructors can update workspaces" ON workspaces
+-- Only admins and instructors can update/delete courses
+CREATE POLICY "Only admins and instructors can update courses" ON courses
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM user_roles
-            WHERE user_roles.organization_id = workspaces.organization_id
+            WHERE user_roles.organization_id = courses.organization_id
             AND user_roles.user_id = auth.uid()
             AND user_roles.role_id IN (
                 SELECT id FROM roles WHERE name IN ('admin', 'instructor')
@@ -883,8 +885,8 @@ CREATE POLICY "Only admins and instructors can update workspaces" ON workspaces
 -- POLICIES: TEAMS
 -- ============================================
 
--- Users can view teams in their workspaces
-CREATE POLICY "Users can view teams in their workspaces" ON teams
+-- Users can view teams in their courses
+CREATE POLICY "Users can view teams in their courses" ON teams
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM organization_users
@@ -971,12 +973,12 @@ CREATE POLICY "Only instructors and admins can create tasks" ON tasks
         )
     );
 
--- Team leaders can create tasks in their workspace
-CREATE POLICY "Team leaders can create tasks in their workspace" ON tasks
+-- Team leaders can create tasks in their course
+CREATE POLICY "Team leaders can create tasks in their course" ON tasks
     FOR INSERT WITH CHECK (
         EXISTS (
             SELECT 1 FROM teams
-            WHERE teams.workspace_id = tasks.workspace_id
+            WHERE teams.course_id = tasks.course_id
             AND teams.team_leader_id = auth.uid()
         )
     );
@@ -1026,12 +1028,12 @@ CREATE POLICY "Users can view chat rooms" ON chat_rooms
         )
     );
 
--- Users can only view workspace chat if in workspace
-CREATE POLICY "Users can view workspace chat rooms" ON chat_rooms
+-- Users can only view course chat if in course
+CREATE POLICY "Users can view course chat rooms" ON chat_rooms
     FOR SELECT USING (
         room_type = 'general'
         OR (
-            room_type = 'workspace'
+            room_type = 'course'
             AND EXISTS (
                 SELECT 1 FROM organization_users
                 WHERE organization_users.organization_id = chat_rooms.organization_id
@@ -1162,13 +1164,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Function: Check if user is team leader in workspace
-CREATE OR REPLACE FUNCTION is_team_leader(workspace_id UUID)
+-- Function: Check if user is team leader in course
+CREATE OR REPLACE FUNCTION is_team_leader_in_course(p_course_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
         SELECT 1 FROM teams
-        WHERE teams.workspace_id = workspace_id
+        WHERE teams.course_id = p_course_id
         AND teams.team_leader_id = auth.uid()
     );
 END;

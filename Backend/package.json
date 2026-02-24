@@ -1,0 +1,20 @@
+{
+  "name": "hubconnect-backend",
+  "version": "1.0.0",
+  "description": "HubConnect Express API",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node src/db/seed.js"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "postgres": "^3.4.8"
+  }
+}
