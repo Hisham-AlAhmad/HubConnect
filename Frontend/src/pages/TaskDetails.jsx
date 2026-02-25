@@ -267,7 +267,7 @@ const TaskDetails = () => {
                   <p className="text-gray-600 dark:text-gray-400">
                     {task.team_id != null
                       ? 'Waiting for team leader to submit this task.'
-                      : 'This task has not been submitted yet.'}}
+                      : 'This task has not been submitted yet.'}
                   </p>
                 </div>
               )}
