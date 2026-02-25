@@ -132,11 +132,25 @@ router.post(
     validate,
     async (req, res, next) => {
         try {
-            const [team] = await sql`SELECT organization_id FROM teams WHERE id = ${req.params.id}`;
+            const [team] = await sql`SELECT organization_id, course_id FROM teams WHERE id = ${req.params.id}`;
             if (!team) return res.status(404).json({ success: false, error: 'Team not found.' });
+
+            // Check if student is already in another team for the same course
+            if (team.course_id) {
+                const [existing] = await sql`
+                    SELECT tm.id, t.name AS team_name
+                    FROM team_members tm
+                    JOIN teams t ON t.id = tm.team_id
+                    WHERE tm.user_id = ${req.body.userId} AND t.course_id = ${team.course_id} AND tm.team_id != ${req.params.id}
+                `;
+                if (existing) {
+                    return res.status(409).json({ success: false, error: `Student is already in team "${existing.team_name}" for this course.` });
+                }
+            }
+
             const [member] = await sql`
-                INSERT INTO team_members (organization_id, team_id, user_id)
-                VALUES (${team.organization_id}, ${req.params.id}, ${req.body.userId})
+                INSERT INTO team_members (organization_id, team_id, user_id, course_id)
+                VALUES (${team.organization_id}, ${req.params.id}, ${req.body.userId}, ${team.course_id ?? null})
                 ON CONFLICT (team_id, user_id) DO NOTHING
                 RETURNING *
             `;

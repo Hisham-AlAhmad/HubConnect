@@ -188,11 +188,25 @@ const Teams = () => {
     return badges[role] || badges.student;
   };
 
-  // Unassigned students (not in any team)
+  // Unassigned students (not in any team within the same course)
   const memberUserIds = teamMembers.map(m => m.user_id);
-  const unassignedStudents = allStudents.filter(s =>
-    !s.team_id && !memberUserIds.includes(s.id)
-  );
+  const unassignedStudents = allStudents.filter(s => {
+    if (memberUserIds.includes(s.id)) return false;
+    // If the selected team has a course, only show students not already in a team for that course
+    if (selectedTeam?.course_id) {
+      // Find all teams in the same course
+      const courseTeamIds = teams.filter(t => t.course_id === selectedTeam.course_id).map(t => t.id);
+      // Check if student is already in one of those teams
+      if (s.team_id && courseTeamIds.length > 0) {
+        // s.team_id is any team the student is in — check if it's in our course
+        const studentTeam = teams.find(t => t.id === s.team_id);
+        if (studentTeam && studentTeam.course_id === selectedTeam.course_id) return false;
+      }
+    } else {
+      if (s.team_id) return false;
+    }
+    return true;
+  });
 
   if (loading) {
     return (
@@ -231,9 +245,9 @@ const Teams = () => {
         </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-          <p className="text-green-700 text-sm">{success}</p>
+          <p className="text-green-700 dark:text-green-400 text-sm">{success}</p>
         </div>
       )}
 
@@ -292,7 +306,7 @@ const Teams = () => {
           {selectedTeam ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-soft border border-gray-100 dark:border-gray-700">
               {/* Team header */}
-              <div className="p-6 border-b bg-gradient-to-r from-primary-50 to-primary-100">
+              <div className="p-6 border-b bg-gradient-to-r from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div

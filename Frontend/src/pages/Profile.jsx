@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar';
 import ThemeToggle from '../components/ThemeToggle';
 import {
   User, Mail, Shield, Save, Lock, Eye, EyeOff,
-  CheckCircle, AlertCircle, Sun, Moon, Settings, Palette
+  CheckCircle, AlertCircle, Sun, Moon, Settings, Palette, Camera
 } from 'lucide-react';
 
 /**
@@ -25,10 +25,11 @@ const Profile = () => {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Profile form
-  const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '', bio: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '', bio: '', avatarUrl: '' });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState('');
   const [profileError, setProfileError] = useState('');
+  const [showAvatarInput, setShowAvatarInput] = useState(false);
 
   // Password form
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -41,7 +42,7 @@ const Profile = () => {
 
   useEffect(() => {
     if (user) {
-      setProfileForm({ name: user.name || '', email: user.email || '', phone: user.phone || '', bio: user.bio || '' });
+      setProfileForm({ name: user.name || '', email: user.email || '', phone: user.phone || '', bio: user.bio || '', avatarUrl: user.avatarUrl || '' });
     }
   }, [user]);
 
@@ -99,7 +100,12 @@ const Profile = () => {
         <div className="h-32 bg-gradient-to-r from-primary-500 to-primary-700" />
         <div className="px-6 pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12">
-            <Avatar name={user?.name || 'U'} imageUrl={user?.avatarUrl} size={96} role={user?.role} className="border-4 border-white dark:border-gray-800 shadow-lg" />
+            <div className="relative group cursor-pointer" onClick={() => { setActiveTab('profile'); setShowAvatarInput(true); }}>
+              <Avatar name={user?.name || 'U'} imageUrl={profileForm.avatarUrl || user?.avatarUrl} size={96} role={user?.role} className="border-4 border-white dark:border-gray-800 shadow-lg" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity border-4 border-transparent">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+            </div>
             <div className="flex-1 pt-2">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{user?.name}</h1>
               <div className="flex items-center gap-3 mt-1">
@@ -148,6 +154,25 @@ const Profile = () => {
               {profileError && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />{profileError}
+                </div>
+              )}
+
+              {showAvatarInput && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <label className={labelCls}>Avatar Image URL</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={profileForm.avatarUrl}
+                      onChange={(e) => setProfileForm(p => ({ ...p, avatarUrl: e.target.value }))}
+                      placeholder="https://example.com/your-photo.jpg"
+                      className={`${inputCls} flex-1`}
+                    />
+                    <button type="button" onClick={() => setShowAvatarInput(false)} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                      Done
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Paste a link to your profile picture</p>
                 </div>
               )}
 

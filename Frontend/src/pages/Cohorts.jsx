@@ -136,46 +136,55 @@ const Cohorts = () => {
                     {visibleCohorts.map((cohort) => (
                         <div
                             key={cohort.id}
-                            className="bg-white dark:bg-gray-800 rounded-xl shadow-soft border border-gray-200 dark:border-gray-700 p-6 hover:shadow-soft-lg transition-shadow group"
+                            className="bg-white dark:bg-gray-800 rounded-xl shadow-soft border border-gray-200 dark:border-gray-700 hover:shadow-soft-lg transition-shadow group overflow-hidden"
                         >
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                                    <GraduationCap size={24} className="text-primary-600 dark:text-primary-400" />
+                            <div className="p-6">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                                        <GraduationCap size={24} className="text-primary-600 dark:text-primary-400" />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(cohort.is_active)}`}>
+                                            {cohort.is_active ? 'active' : 'inactive'}
+                                        </span>
+                                        {isAdmin && (
+                                            <div className="flex gap-1">
+                                                <button onClick={() => openEdit(cohort)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Edit">
+                                                    <Pencil size={14} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+                                                </button>
+                                                <button onClick={() => setShowDelete(cohort.id)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" title="Delete">
+                                                    <Trash2 size={14} className="text-gray-400 hover:text-red-600 dark:hover:text-red-400" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(cohort.is_active)}`}>
-                                        {cohort.is_active ? 'active' : 'inactive'}
-                                    </span>
-                                    {isAdmin && (
-                                        <div className="flex gap-1">
-                                            <button onClick={() => openEdit(cohort)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Edit">
-                                                <Pencil size={14} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
-                                            </button>
-                                            <button onClick={() => setShowDelete(cohort.id)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" title="Delete">
-                                                <Trash2 size={14} className="text-gray-400 hover:text-red-600 dark:hover:text-red-400" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
 
-                            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                                {cohort.name}
-                            </h3>
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                                    {cohort.name}
+                                </h3>
 
-                            <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-                                <div className="flex items-center gap-2">
-                                    <Calendar size={14} />
-                                    <span>{formatDate(cohort.start_date)} — {formatDate(cohort.end_date)}</span>
+                                <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={14} />
+                                        <span>{formatDate(cohort.start_date)} — {formatDate(cohort.end_date)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Users size={14} />
+                                        <span>{cohort.student_count ?? 0} student{(cohort.student_count ?? 0) !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <GraduationCap size={14} />
+                                        <span>{cohort.instructor_count ?? 0} instructor{(cohort.instructor_count ?? 0) !== 1 ? 's' : ''}</span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Users size={14} />
-                                    <span>{cohort.student_count ?? 0} student{(cohort.student_count ?? 0) !== 1 ? 's' : ''}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <GraduationCap size={14} />
-                                    <span>{cohort.instructor_count ?? 0} instructor{(cohort.instructor_count ?? 0) !== 1 ? 's' : ''}</span>
-                                </div>
+
+                                <button
+                                    onClick={() => navigate(`/cohorts/${cohort.id}`)}
+                                    className="mt-4 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+                                >
+                                    View Details <ChevronRight size={16} />
+                                </button>
                             </div>
                         </div>
                     ))}

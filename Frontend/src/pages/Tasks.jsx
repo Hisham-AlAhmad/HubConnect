@@ -85,8 +85,8 @@ const Tasks = () => {
           </p>
         </div>
 
-        {/* Create Task button (Instructor/Admin only) */}
-        {hasRole(['instructor', 'admin']) && (
+        {/* Create Task button (Instructor/Admin/Team Leader) */}
+        {hasRole(['instructor', 'admin', 'team_leader']) && (
           <button
             onClick={() => navigate('/tasks/create')}
             className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"

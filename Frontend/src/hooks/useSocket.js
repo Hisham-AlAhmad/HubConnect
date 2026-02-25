@@ -36,12 +36,16 @@ export const useSocket = (roomId) => {
 
   // ── Load message history from REST whenever roomId changes ──
   useEffect(() => {
-    if (!roomId) { setMessages([]); return; }
+    // Always clear old messages immediately when room changes
+    setMessages([]);
+    if (!roomId) return;
+    let cancelled = false;
     chatAPI.getMessages(roomId)
       .then((res) => {
-        if (res?.success) setMessages((res.data ?? []).map(normalizeMsg));
+        if (!cancelled && res?.success) setMessages((res.data ?? []).map(normalizeMsg));
       })
       .catch(() => {/* silently fail – socket will still work */});
+    return () => { cancelled = true; };
   }, [roomId]);
 
   // ── Manage real Socket.io connection ────────────────────────

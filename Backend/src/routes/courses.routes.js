@@ -174,14 +174,32 @@ router.delete('/:id/teams/:teamId', authorize('admin', 'instructor'), async (req
 router.post(
     '/:id/teams/:teamId/leader',
     authorize('admin', 'instructor'),
-    [body('studentId').isUUID()],
+    [body('studentId').optional().isUUID(), body('userId').optional().isUUID()],
     validate,
     async (req, res, next) => {
         try {
+            const leaderId = req.body.studentId || req.body.userId;
+            if (!leaderId) return res.status(400).json({ success: false, error: 'studentId or userId is required.' });
+
+            // Ensure the user is a member of the team
+            const [membership] = await sql`
+                SELECT id FROM team_members WHERE team_id = ${req.params.teamId} AND user_id = ${leaderId}
+            `;
+            if (!membership) return res.status(400).json({ success: false, error: 'User must be a member of the team to be assigned as leader.' });
+
+            // Update team leader
             await sql`
-                UPDATE teams SET team_leader_id = ${req.body.studentId}, updated_at = CURRENT_TIMESTAMP
+                UPDATE teams SET team_leader_id = ${leaderId}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ${req.params.teamId} AND course_id = ${req.params.id}
             `;
+
+            // Update is_leader flags in team_members
+            await sql`UPDATE team_members SET is_leader = false WHERE team_id = ${req.params.teamId}`;
+            await sql`UPDATE team_members SET is_leader = true WHERE team_id = ${req.params.teamId} AND user_id = ${leaderId}`;
+
+            // Update user role to team_leader if currently student
+            await sql`UPDATE profiles SET role = 'team_leader' WHERE id = ${leaderId} AND role = 'student'`;
+
             res.json({ success: true, message: 'Team leader assigned.' });
         } catch (err) { next(err); }
     }
@@ -191,15 +209,30 @@ router.post(
 router.post(
     '/:id/teams/:teamId/members',
     authorize('admin', 'instructor'),
-    [body('studentId').isUUID()],
+    [body('studentId').optional().isUUID(), body('userId').optional().isUUID()],
     validate,
     async (req, res, next) => {
         try {
-            const [team] = await sql`SELECT organization_id FROM teams WHERE id = ${req.params.teamId}`;
+            const studentId = req.body.studentId || req.body.userId;
+            if (!studentId) return res.status(400).json({ success: false, error: 'studentId or userId is required.' });
+
+            const [team] = await sql`SELECT organization_id, course_id FROM teams WHERE id = ${req.params.teamId}`;
             if (!team) return res.status(404).json({ success: false, error: 'Team not found.' });
+
+            // Check if student is already in another team for the same course
+            const [existing] = await sql`
+                SELECT tm.id, t.name AS team_name
+                FROM team_members tm
+                JOIN teams t ON t.id = tm.team_id
+                WHERE tm.user_id = ${studentId} AND t.course_id = ${team.course_id} AND tm.team_id != ${req.params.teamId}
+            `;
+            if (existing) {
+                return res.status(409).json({ success: false, error: `Student is already in team "${existing.team_name}" for this course.` });
+            }
+
             const [member] = await sql`
-                INSERT INTO team_members (organization_id, team_id, user_id)
-                VALUES (${team.organization_id}, ${req.params.teamId}, ${req.body.studentId})
+                INSERT INTO team_members (organization_id, team_id, user_id, course_id)
+                VALUES (${team.organization_id}, ${req.params.teamId}, ${studentId}, ${team.course_id})
                 ON CONFLICT (team_id, user_id) DO NOTHING
                 RETURNING *
             `;

@@ -38,11 +38,16 @@ router.get('/:id', async (req, res, next) => {
     try {
         const [cohort] = await sql`
             SELECT c.*, (
-                SELECT json_agg(json_build_object('id', p.id, 'email', p.email, 'role', p.role, 'full_name', p.full_name))
+                SELECT json_agg(json_build_object('id', p.id, 'email', p.email, 'role', uc.role, 'full_name', p.full_name, 'avatar_url', p.avatar_url))
                 FROM user_cohorts uc
                 JOIN profiles p ON p.id = uc.user_id
                 WHERE uc.cohort_id = c.id
-            ) AS members
+            ) AS members,
+            (
+                SELECT json_agg(json_build_object('id', cr.id, 'name', cr.name, 'status', cr.status))
+                FROM courses cr
+                WHERE cr.cohort_id = c.id
+            ) AS courses
             FROM cohorts c WHERE c.id = ${req.params.id}
         `;
         if (!cohort) return res.status(404).json({ success: false, error: 'Cohort not found.' });

@@ -49,12 +49,22 @@ const CreateTask = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      // Reset team/student selection when course changes
+      if (name === 'courseId') {
+        next.teamId = '';
+        next.assigneeId = '';
+      }
+      return next;
+    });
     setError('');
   };
+
+  // Filter teams to only those belonging to the selected course
+  const filteredTeams = formData.courseId
+    ? teams.filter((t) => String(t.course_id) === String(formData.courseId))
+    : teams;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -301,8 +311,8 @@ const CreateTask = () => {
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 disabled={loading}
               >
-                <option value="">Select a team</option>
-                {teams.map((t) => (
+                <option value="">Select a team{formData.courseId ? '' : ' (select a course first)'}</option>
+                {filteredTeams.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>

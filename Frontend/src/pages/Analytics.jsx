@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { analyticsAPI } from '../services/api';
 import {
   BarChart,
@@ -55,6 +55,56 @@ const Analytics = () => {
 
   const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899'];
 
+  // ── Export report as CSV ──────────────────────────────────────
+  const exportReport = useCallback(() => {
+    const lines = [];
+
+    // Overview
+    lines.push('=== Submission Overview ===');
+    lines.push('Metric,Value');
+    lines.push(`Total Tasks,${stats?.totalTasks ?? 0}`);
+    lines.push(`Submitted Tasks,${stats?.submittedTasks ?? 0}`);
+    lines.push(`Pending Tasks,${stats?.pendingTasks ?? 0}`);
+    lines.push(`Submission Rate (%),${stats?.submissionRate ?? 0}`);
+    lines.push('');
+
+    // On-Time vs Late
+    lines.push('=== On-Time vs Late ===');
+    lines.push('Category,Count,Percentage');
+    onTimeLate.forEach((item) => {
+      lines.push(`${item.name},${item.value},${item.percentage}%`);
+    });
+    lines.push('');
+
+    // Submission Timeline
+    lines.push('=== Submission Timeline ===');
+    lines.push('Month,On Time,Late');
+    timeline.forEach((row) => {
+      lines.push(`${row.month},${row.onTime},${row.late}`);
+    });
+    lines.push('');
+
+    // Team Rankings
+    lines.push('=== Team Performance Rankings ===');
+    lines.push('Rank,Team Name,Score,Submissions,Status');
+    rankings.forEach((team, index) => {
+      const status = team.score >= 90 ? 'Excellent' : team.score >= 70 ? 'Good' : 'Needs Improvement';
+      lines.push(`${index + 1},${team.teamName},${team.score},${team.submissions},${status}`);
+    });
+
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `HubConnect_Analytics_Report_${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [stats, timeline, rankings, onTimeLate]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -73,7 +123,10 @@ const Analytics = () => {
             Performance insights and submission statistics
           </p>
         </div>
-        <button className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+        <button
+          onClick={exportReport}
+          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+        >
           <Download size={20} />
           <span>Export Report</span>
         </button>

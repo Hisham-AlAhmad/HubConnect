@@ -32,6 +32,9 @@ const CourseDetails = () => {
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'medium' });
 
+    // Course completion confirmation
+    const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+
     const canManage = hasRole(['admin', 'instructor']);
 
     const fetchCourse = useCallback(async () => {
@@ -103,6 +106,7 @@ const CourseDetails = () => {
     const handleFinish = async () => {
         try {
             await courseAPI.finish(id);
+            setShowFinishConfirm(false);
             showMsg('Course marked as finished!');
             await fetchCourse();
         } catch (err) {
@@ -212,7 +216,7 @@ const CourseDetails = () => {
                                     <Plus size={16} /> Add Team
                                 </button>
                                 <button
-                                    onClick={handleFinish}
+                                    onClick={() => setShowFinishConfirm(true)}
                                     className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
                                 >
                                     <CheckCircle size={16} /> Mark Finished
@@ -457,6 +461,40 @@ const CourseDetails = () => {
                             <div className="flex justify-end gap-2 pt-2">
                                 <button onClick={() => setShowTaskForm(false)} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
                                 <button onClick={handleCreateTask} className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">Create Task</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Course Completion Confirmation Modal */}
+            {showFinishConfirm && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm">
+                        <div className="p-6 text-center">
+                            <div className="mx-auto w-12 h-12 flex items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30 mb-4">
+                                <CheckCircle size={24} className="text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Mark Course as Finished?</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                This will mark <strong className="text-gray-700 dark:text-gray-300">{course.name}</strong> as completed.
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                Students will no longer be able to submit tasks for this course.
+                            </p>
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    onClick={() => setShowFinishConfirm(false)}
+                                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleFinish}
+                                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                                >
+                                    Yes, Mark Finished
+                                </button>
                             </div>
                         </div>
                     </div>

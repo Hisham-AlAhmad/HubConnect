@@ -24,6 +24,7 @@ import sql from '../db/index.js';
 import config from '../config/index.js';
 import authenticate from '../middleware/authenticate.js';
 import { validate } from '../middleware/validate.js';
+import { generateUniqueEmail } from '../helpers/generateEmail.js';
 
 const router = Router();
 
@@ -48,11 +49,15 @@ const buildUserPayload = (profile, extra = {}) => ({
  * Create a row in auth.users.
  * Local  → minimal (id, email) insert into our custom auth schema.
  * Supabase → attempts a Supabase-compatible insert; falls back to minimal.
+ * @param {string} id
+ * @param {string} email
+ * @param {object} [txSql] – optional transaction sql object
  */
-const createAuthUser = async (id, email) => {
+const createAuthUser = async (id, email, txSql = null) => {
+    const q = txSql || sql;
     if (config.isSupabase) {
         try {
-            await sql`
+            await q`
                 INSERT INTO auth.users
                     (id, aud, role, email, encrypted_password,
                      email_confirmed_at, created_at, updated_at,
@@ -65,10 +70,10 @@ const createAuthUser = async (id, email) => {
             `;
         } catch {
             // Supabase schema version differs — try bare minimum
-            await sql`INSERT INTO auth.users (id, email, created_at, updated_at) VALUES (${id}, ${email}, NOW(), NOW())`;
+            await q`INSERT INTO auth.users (id, email, created_at, updated_at) VALUES (${id}, ${email}, NOW(), NOW())`;
         }
     } else {
-        await sql`INSERT INTO auth.users (id, email) VALUES (${id}, ${email}) ON CONFLICT DO NOTHING`;
+        await q`INSERT INTO auth.users (id, email) VALUES (${id}, ${email}) ON CONFLICT DO NOTHING`;
     }
 };
 
@@ -76,7 +81,7 @@ const createAuthUser = async (id, email) => {
 router.post(
     '/register',
     [
-        body('email').isEmail().normalizeEmail(),
+        body('email').optional().isEmail().normalizeEmail(),
         body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
         body('name').trim().notEmpty().withMessage('Name is required'),
         body('role').optional().isIn(['admin', 'instructor', 'student', 'team_leader']),
@@ -84,54 +89,78 @@ router.post(
     validate,
     async (req, res, next) => {
         try {
-            const { email, password, name, role = 'student' } = req.body;
+            const { password, name, role = 'student' } = req.body;
+            let { email } = req.body;
 
-            // Check duplicate by email in profiles
-            const existing = await sql`SELECT id FROM profiles WHERE email = ${email} LIMIT 1`;
-            if (existing.length > 0) {
-                return res.status(409).json({ success: false, error: 'Email already registered.' });
-            }
-
-            const newId       = crypto.randomUUID();
+            // Hash password outside the transaction (CPU-intensive)
             const passwordHash = await bcrypt.hash(password, config.bcryptRounds);
 
-            // Create the auth.users row (FK target for profiles)
-            await createAuthUser(newId, email);
+            // Wrap everything in a SERIALIZABLE transaction to prevent
+            // race-conditions on email uniqueness.
+            const result = await sql.begin('isolation level serializable', async (txSql) => {
+                // If no email was provided, auto-generate from the name
+                if (!email) {
+                    email = await generateUniqueEmail(name, txSql);
+                } else {
+                    // Manual email — check for duplicates inside the tx
+                    const existing = await txSql`SELECT id FROM profiles WHERE email = ${email} LIMIT 1`;
+                    if (existing.length > 0) {
+                        const err = new Error('Email already registered.');
+                        err.status = 409;
+                        throw err;
+                    }
+                }
 
-            // Create profile with credentials stored here
-            const [profile] = await sql`
-                INSERT INTO profiles (id, email, full_name, role, password_hash)
-                VALUES (${newId}, ${email}, ${name}, ${role}, ${passwordHash})
-                RETURNING *
-            `;
+                const newId = crypto.randomUUID();
 
-            // Attach to default org if one exists
-            let orgId = null;
-            const [defaultOrg] = await sql`SELECT id FROM organizations LIMIT 1`;
-            if (defaultOrg) {
-                orgId = defaultOrg.id;
-                await sql`
-                    INSERT INTO organization_users (organization_id, user_id)
-                    VALUES (${orgId}, ${newId})
-                    ON CONFLICT DO NOTHING
+                // Create the auth.users row (FK target for profiles)
+                await createAuthUser(newId, email, txSql);
+
+                // Create profile with credentials stored here
+                const [profile] = await txSql`
+                    INSERT INTO profiles (id, email, full_name, role, password_hash)
+                    VALUES (${newId}, ${email}, ${name}, ${role}, ${passwordHash})
+                    RETURNING *
                 `;
-            }
 
-            // Assign to cohort if provided
-            const { cohortId } = req.body;
-            if (cohortId && orgId) {
-                await sql`
-                    INSERT INTO user_cohorts (organization_id, user_id, cohort_id, role)
-                    VALUES (${orgId}, ${newId}, ${cohortId}, ${role})
-                    ON CONFLICT (organization_id, user_id, cohort_id) DO NOTHING
-                `;
-            }
+                // Attach to default org if one exists
+                let orgId = null;
+                const [defaultOrg] = await txSql`SELECT id FROM organizations LIMIT 1`;
+                if (defaultOrg) {
+                    orgId = defaultOrg.id;
+                    await txSql`
+                        INSERT INTO organization_users (organization_id, user_id)
+                        VALUES (${orgId}, ${newId})
+                        ON CONFLICT DO NOTHING
+                    `;
+                }
 
-            const userPayload = buildUserPayload(profile, { organizationId: orgId });
+                // Assign to cohort if provided
+                const { cohortId } = req.body;
+                if (cohortId && orgId) {
+                    await txSql`
+                        INSERT INTO user_cohorts (organization_id, user_id, cohort_id, role)
+                        VALUES (${orgId}, ${newId}, ${cohortId}, ${role})
+                        ON CONFLICT (organization_id, user_id, cohort_id) DO NOTHING
+                    `;
+                }
+
+                return { profile, orgId };
+            });
+
+            const userPayload = buildUserPayload(result.profile, { organizationId: result.orgId });
             const token       = signToken(userPayload);
 
             return res.status(201).json({ success: true, data: { user: userPayload, token } });
         } catch (err) {
+            // Handle our custom 409 from inside the transaction
+            if (err.status === 409) {
+                return res.status(409).json({ success: false, error: err.message });
+            }
+            // Retry on serialization failure (concurrent insert race)
+            if (err.code === '40001') {
+                return res.status(409).json({ success: false, error: 'Concurrent registration conflict. Please try again.' });
+            }
             next(err);
         }
     }

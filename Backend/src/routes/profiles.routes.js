@@ -53,10 +53,16 @@ router.get('/students', authorize('admin', 'instructor'), async (_req, res, next
 router.get('/instructors', authorize('admin'), async (_req, res, next) => {
     try {
         const instructors = await sql`
-            SELECT id, email, role, full_name, avatar_url
-            FROM profiles
-            WHERE role = 'instructor'
-            ORDER BY full_name
+            SELECT p.id, p.email, p.role, p.full_name, p.avatar_url, p.bio, p.phone_number,
+                   (
+                       SELECT json_agg(json_build_object('cohort_id', uc.cohort_id, 'cohort_name', c.name))
+                       FROM user_cohorts uc
+                       JOIN cohorts c ON c.id = uc.cohort_id
+                       WHERE uc.user_id = p.id AND uc.role = 'instructor'
+                   ) AS cohorts
+            FROM profiles p
+            WHERE p.role = 'instructor'
+            ORDER BY p.full_name
         `;
         res.json({ success: true, data: instructors });
     } catch (err) { next(err); }
@@ -78,19 +84,21 @@ router.get('/:id', async (req, res, next) => {
 /* PUT /profiles/:id — own profile or admin */
 router.put(
     '/:id',
-    [body('full_name').optional().trim(), body('phone_number').optional().trim(), body('bio').optional().trim()],
+    [body('full_name').optional().trim(), body('phone_number').optional().trim(), body('bio').optional().trim(), body('avatar_url').optional().trim(), body('email').optional().isEmail()],
     validate,
     async (req, res, next) => {
         try {
             if (req.user.id !== req.params.id && req.user.role !== 'admin') {
                 return res.status(403).json({ success: false, error: 'Forbidden.' });
             }
-            const { full_name, phone_number, bio } = req.body;
+            const { full_name, phone_number, bio, avatar_url, email } = req.body;
             const [profile] = await sql`
                 UPDATE profiles
                 SET full_name    = COALESCE(${full_name    ?? null}, full_name),
                     phone_number = COALESCE(${phone_number ?? null}, phone_number),
                     bio          = COALESCE(${bio          ?? null}, bio),
+                    avatar_url   = COALESCE(${avatar_url   ?? null}, avatar_url),
+                    email        = COALESCE(${email        ?? null}, email),
                     updated_at   = CURRENT_TIMESTAMP
                 WHERE id = ${req.params.id}
                 RETURNING *

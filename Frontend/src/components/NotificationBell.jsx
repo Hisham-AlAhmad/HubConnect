@@ -1,4 +1,5 @@
 import { useState, useContext, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, X } from 'lucide-react';
 import { NotificationContext } from '../context/NotificationContext';
 import { formatDateTime } from '../utils/helpers';
@@ -11,6 +12,21 @@ const NotificationBell = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useContext(NotificationContext);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+
+  // Map resource_type to route paths
+  const getNotificationRoute = (notification) => {
+    const { resource_type, resource_id } = notification;
+    if (!resource_type || !resource_id) return null;
+    const routeMap = {
+      task: `/tasks/${resource_id}`,
+      course: `/courses/${resource_id}`,
+      team: `/teams`,
+      submission: `/tasks/${resource_id}`,
+      chat: `/chat`,
+    };
+    return routeMap[resource_type] || null;
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -32,6 +48,11 @@ const NotificationBell = () => {
   const handleNotificationClick = (notification) => {
     if (!notification.read) {
       markAsRead(notification.id);
+    }
+    const route = getNotificationRoute(notification);
+    if (route) {
+      setIsOpen(false);
+      navigate(route);
     }
   };
 

@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useCohort } from '../context/CohortContext';
-import { teamAPI, authAPI } from '../services/api';
+import { teamAPI, authAPI, profileAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 import {
     Users, Search, Mail, Shield, User, Crown, Filter,
-    ChevronDown, GraduationCap, Plus, X
+    ChevronDown, GraduationCap, Plus, X, Pencil, Save
 } from 'lucide-react';
 
 /**
  * Students Page
- * Admin/Instructor can view all students, filter by cohort, and see details.
+ * Admin/Instructor can view all students, filter by cohort, edit details.
  */
 
 const DEFAULT_PASSWORD = '123456789';
@@ -25,9 +25,15 @@ const Students = () => {
 
     // Create modal state
     const [showCreate, setShowCreate] = useState(false);
-    const [createForm, setCreateForm] = useState({ name: '', email: '', password: DEFAULT_PASSWORD, cohortId: '' });
+    const [createForm, setCreateForm] = useState({ name: '', password: DEFAULT_PASSWORD, cohortId: '' });
     const [createLoading, setCreateLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Edit modal state
+    const [showEdit, setShowEdit] = useState(null);
+    const [editForm, setEditForm] = useState({ full_name: '', email: '', bio: '', phone_number: '' });
+    const [editLoading, setEditLoading] = useState(false);
+    const [editError, setEditError] = useState('');
 
     const fetchStudents = async () => {
         try {
@@ -47,8 +53,8 @@ const Students = () => {
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        if (!createForm.name.trim() || !createForm.email.trim()) {
-            setError('Name and email are required');
+        if (!createForm.name.trim()) {
+            setError('Name is required');
             return;
         }
         if (!createForm.cohortId) {
@@ -59,13 +65,12 @@ const Students = () => {
             setCreateLoading(true);
             await authAPI.register({
                 name: createForm.name.trim(),
-                email: createForm.email.trim() + '@hub.com',
                 password: createForm.password || DEFAULT_PASSWORD,
                 role: 'student',
                 cohortId: createForm.cohortId,
             });
             setShowCreate(false);
-            setCreateForm({ name: '', email: '', password: DEFAULT_PASSWORD, cohortId: '' });
+            setCreateForm({ name: '', password: DEFAULT_PASSWORD, cohortId: '' });
             await fetchStudents();
         } catch (err) {
             setError(err?.response?.data?.error || err.message || 'Failed to create student');
@@ -86,6 +91,33 @@ const Students = () => {
     const getRoleBadge = (role) => {
         if (role === 'team_leader') return { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', label: 'Team Leader', icon: Crown };
         return { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', label: 'Student', icon: User };
+    };
+
+    const openEditModal = (student) => {
+        setEditForm({
+            full_name: student.full_name || '',
+            email: student.email || '',
+            bio: student.bio || '',
+            phone_number: student.phone_number || '',
+        });
+        setShowEdit(student.id);
+        setEditError('');
+    };
+
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        setEditError('');
+        if (!editForm.full_name.trim()) { setEditError('Name is required'); return; }
+        try {
+            setEditLoading(true);
+            await profileAPI.update(showEdit, editForm);
+            setShowEdit(null);
+            await fetchStudents();
+        } catch (err) {
+            setEditError(err?.error || err?.message || 'Failed to update student');
+        } finally {
+            setEditLoading(false);
+        }
     };
 
     if (loading) {
@@ -178,6 +210,7 @@ const Students = () => {
                                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
                                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cohort</th>
                                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Team</th>
+                                    <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -206,6 +239,15 @@ const Students = () => {
                                             <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
                                                 {student.team_name || 'Unassigned'}
                                             </td>
+                                            <td className="py-3 px-4 text-right">
+                                                <button
+                                                    onClick={() => openEditModal(student)}
+                                                    className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                                                    title="Edit student"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -232,14 +274,7 @@ const Students = () => {
                                 <input type="text" value={createForm.name} onChange={(e) => setCreateForm(f => ({ ...f, name: e.target.value }))} required placeholder="Enter full name"
                                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email *</label>
-                                <div className="flex">
-                                    <input type="text" value={createForm.email} onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value.replace(/[@.]/g, '') }))} required placeholder="username"
-                                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-l-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
-                                    <span className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-lg bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-sm">@hub.com</span>
-                                </div>
-                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">Email will be generated automatically from the name</p>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cohort *</label>
                                 <select value={createForm.cohortId} onChange={(e) => setCreateForm(f => ({ ...f, cohortId: e.target.value }))} required
@@ -260,6 +295,49 @@ const Students = () => {
                                 <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm" disabled={createLoading}>Cancel</button>
                                 <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium" disabled={createLoading}>
                                     {createLoading ? 'Creating...' : 'Create Student'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Student Modal */}
+            {showEdit && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+                        <div className="flex items-center justify-between p-5 border-b dark:border-gray-700">
+                            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Edit Student</h2>
+                            <button onClick={() => setShowEdit(null)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
+                            {editError && (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">{editError}</div>
+                            )}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name *</label>
+                                <input type="text" value={editForm.full_name} onChange={(e) => setEditForm(f => ({ ...f, full_name: e.target.value }))} required
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                                <input type="email" value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
+                                <input type="tel" value={editForm.phone_number} onChange={(e) => setEditForm(f => ({ ...f, phone_number: e.target.value }))} placeholder="Enter phone number"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bio</label>
+                                <textarea value={editForm.bio} onChange={(e) => setEditForm(f => ({ ...f, bio: e.target.value }))} placeholder="Brief bio..." rows={3}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm resize-none" />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setShowEdit(null)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm" disabled={editLoading}>Cancel</button>
+                                <button type="submit" className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium" disabled={editLoading}>
+                                    <Save size={14} />{editLoading ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
                         </form>

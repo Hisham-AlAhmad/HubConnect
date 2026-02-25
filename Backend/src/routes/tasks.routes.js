@@ -35,14 +35,14 @@ router.get('/', async (req, res, next) => {
         } else {
             // student / team_leader — tasks assigned to their team
             tasks = await sql`
-                SELECT t.*, p.full_name AS assignee_name, tm.name AS team_name
+                SELECT DISTINCT ON (t.id) t.*, p.full_name AS assignee_name, tm.name AS team_name
                 FROM tasks t
                 LEFT JOIN profiles p ON p.id = t.assignee_id
                 LEFT JOIN teams tm ON tm.id = t.team_id
                 LEFT JOIN team_members mbr ON mbr.team_id = t.team_id
                 WHERE t.deleted_at IS NULL
                   AND (t.assignee_id = ${userId} OR mbr.user_id = ${userId})
-                ORDER BY t.created_at DESC
+                ORDER BY t.id, t.created_at DESC
             `;
         }
         res.json({ success: true, data: tasks });
@@ -52,17 +52,29 @@ router.get('/', async (req, res, next) => {
 /* GET /tasks/my */
 router.get('/my', async (req, res, next) => {
     try {
-        const { id: userId } = req.user;
-        const tasks = await sql`
-            SELECT t.*, p.full_name AS assignee_name, tm.name AS team_name
-            FROM tasks t
-            LEFT JOIN profiles p ON p.id = t.assignee_id
-            LEFT JOIN teams tm ON tm.id = t.team_id
-            LEFT JOIN team_members mbr ON mbr.team_id = t.team_id AND mbr.user_id = ${userId}
-            WHERE t.deleted_at IS NULL
-              AND (t.assignee_id = ${userId} OR mbr.user_id = ${userId})
-            ORDER BY t.due_date ASC
-        `;
+        const { id: userId, role } = req.user;
+        let tasks;
+        if (role === 'admin' || role === 'instructor') {
+            tasks = await sql`
+                SELECT t.*, p.full_name AS assignee_name, tm.name AS team_name
+                FROM tasks t
+                LEFT JOIN profiles p ON p.id = t.assignee_id
+                LEFT JOIN teams tm ON tm.id = t.team_id
+                WHERE t.deleted_at IS NULL
+                ORDER BY t.due_date ASC
+            `;
+        } else {
+            tasks = await sql`
+                SELECT DISTINCT ON (t.id) t.*, p.full_name AS assignee_name, tm.name AS team_name
+                FROM tasks t
+                LEFT JOIN profiles p ON p.id = t.assignee_id
+                LEFT JOIN teams tm ON tm.id = t.team_id
+                LEFT JOIN team_members mbr ON mbr.team_id = t.team_id AND mbr.user_id = ${userId}
+                WHERE t.deleted_at IS NULL
+                  AND (t.assignee_id = ${userId} OR mbr.user_id = ${userId})
+                ORDER BY t.id, t.due_date ASC
+            `;
+        }
         res.json({ success: true, data: tasks });
     } catch (err) { next(err); }
 });

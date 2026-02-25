@@ -20,6 +20,7 @@ import Profile from '../pages/Profile';
 import Courses from '../pages/Courses';
 import CourseDetails from '../pages/CourseDetails';
 import Cohorts from '../pages/Cohorts';
+import CohortDetails from '../pages/CohortDetails';
 import Students from '../pages/Students';
 import Instructors from '../pages/Instructors';
 import NotFound from '../pages/NotFound';
@@ -96,6 +97,14 @@ const AppRoutes = () => {
           element={
             <RoleGuard allowedRoles={['admin', 'instructor']}>
               <Cohorts />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="cohorts/:id"
+          element={
+            <RoleGuard allowedRoles={['admin', 'instructor']}>
+              <CohortDetails />
             </RoleGuard>
           }
         />

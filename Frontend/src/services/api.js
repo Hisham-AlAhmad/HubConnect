@@ -206,6 +206,9 @@ export const chatAPI = {
     instance.get(`/chat/rooms/${roomId}/messages`, { params }),
   sendMessage: (roomId, content) =>
     instance.post(`/chat/rooms/${roomId}/messages`, { content }),
+  getUsers: () => instance.get('/chat/users'),
+  getOrCreateDM: (userId) => instance.post(`/chat/dm/${userId}`),
+  getUnreadDMs: () => instance.get('/chat/dm/unread'),
 };
 
 // ── ROLES API ─────────────────────────────────────────────────────────────────
