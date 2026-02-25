@@ -106,9 +106,9 @@ export default function CheckInOut() {
     return `${hours}h ${mins}m`;
   };
 
-  const isCheckedIn = todayStatus?.status === 'checked_in';
-  const isCheckedOut = todayStatus?.status === 'checked_out';
-  const hasNotCheckedIn = !todayStatus || todayStatus.status === 'none';
+  const isCheckedIn = !!todayStatus && !todayStatus.check_out_time;
+  const isCheckedOut = !!todayStatus?.check_out_time;
+  const hasNotCheckedIn = !todayStatus;
 
   if (loading) {
     return (
@@ -164,13 +164,13 @@ export default function CheckInOut() {
             {isCheckedIn && (
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm font-medium">
                 <CheckCircle className="w-4 h-4" />
-                Checked in at {formatTime(todayStatus.checkInTime)}
+                Checked in at {formatTime(todayStatus.check_in_time)}
               </span>
             )}
             {isCheckedOut && (
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-medium">
                 <CheckCircle className="w-4 h-4" />
-                Completed — {calculateHours(todayStatus.checkInTime, todayStatus.checkOutTime)} today
+                Completed — {calculateHours(todayStatus.check_in_time, todayStatus.check_out_time)} today
               </span>
             )}
           </div>
@@ -221,7 +221,7 @@ export default function CheckInOut() {
       </div>
 
       {/* Today's Details */}
-      {todayStatus && todayStatus.status !== 'none' && (
+      {todayStatus && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center gap-3 mb-2">
@@ -230,7 +230,7 @@ export default function CheckInOut() {
               </div>
               <span className="text-sm text-gray-500 dark:text-gray-400">Check In</span>
             </div>
-            <p className="text-xl font-semibold text-gray-900 dark:text-white">{formatTime(todayStatus.checkInTime)}</p>
+            <p className="text-xl font-semibold text-gray-900 dark:text-white">{formatTime(todayStatus.check_in_time)}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center gap-3 mb-2">
@@ -240,7 +240,7 @@ export default function CheckInOut() {
               <span className="text-sm text-gray-500 dark:text-gray-400">Check Out</span>
             </div>
             <p className="text-xl font-semibold text-gray-900 dark:text-white">
-              {todayStatus.checkOutTime ? formatTime(todayStatus.checkOutTime) : 'In progress...'}
+              {todayStatus.check_out_time ? formatTime(todayStatus.check_out_time) : 'In progress...'}
             </p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
@@ -251,9 +251,9 @@ export default function CheckInOut() {
               <span className="text-sm text-gray-500 dark:text-gray-400">Hours</span>
             </div>
             <p className="text-xl font-semibold text-gray-900 dark:text-white">
-              {todayStatus.checkOutTime
-                ? calculateHours(todayStatus.checkInTime, todayStatus.checkOutTime)
-                : calculateHours(todayStatus.checkInTime, new Date().toISOString())}
+              {todayStatus.check_out_time
+                ? calculateHours(todayStatus.check_in_time, todayStatus.check_out_time)
+                : calculateHours(todayStatus.check_in_time, new Date().toISOString())}
             </p>
           </div>
         </div>
@@ -300,15 +300,15 @@ export default function CheckInOut() {
                 {history.map((record) => (
                   <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{formatDate(record.date)}</td>
-                    <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{formatTime(record.checkInTime)}</td>
-                    <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{record.checkOutTime ? formatTime(record.checkOutTime) : '--'}</td>
-                    <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{calculateHours(record.checkInTime, record.checkOutTime)}</td>
+                    <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{formatTime(record.check_in_time)}</td>
+                    <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{record.check_out_time ? formatTime(record.check_out_time) : '--'}</td>
+                    <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{calculateHours(record.check_in_time, record.check_out_time)}</td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.checkOutTime
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.check_out_time
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                           : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
                         }`}>
-                        {record.checkOutTime ? 'Complete' : 'In Progress'}
+                        {record.check_out_time ? 'Complete' : 'In Progress'}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">{record.notes || '--'}</td>

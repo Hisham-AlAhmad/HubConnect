@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCourse } from '../context/CourseContext';
+import { useCohort } from '../context/CohortContext';
 import {
     Briefcase, Plus, Calendar, Users, CheckCircle, Clock,
     AlertCircle, X, ChevronRight
@@ -13,29 +14,39 @@ import {
  */
 const Courses = () => {
     const { user, hasRole } = useAuth();
-    const { courses, createCourse } = useCourse();
+    const { courses, createCourse, loading } = useCourse();
+    const { cohorts } = useCohort();
     const navigate = useNavigate();
 
     const [showCreate, setShowCreate] = useState(false);
-    const [form, setForm] = useState({ name: '', endDate: '' });
+    const [form, setForm] = useState({ name: '', endDate: '', cohortId: '' });
     const [error, setError] = useState('');
+    const [creating, setCreating] = useState(false);
 
     const canCreate = hasRole(['admin', 'instructor']);
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!form.name.trim()) { setError('Name is required'); return; }
         if (!form.endDate) { setError('End date is required'); return; }
+        if (!form.cohortId) { setError('Cohort is required'); return; }
 
-        const result = createCourse({
-            name: form.name.trim(),
-            endDate: form.endDate,
-        });
-
-        if (result?.error) { setError(result.error); return; }
-
-        setShowCreate(false);
-        setForm({ name: '', endDate: '' });
-        setError('');
+        try {
+            setCreating(true);
+            const cohort = cohorts.find(c => c.id === form.cohortId);
+            await createCourse({
+                name: form.name.trim(),
+                endDate: form.endDate,
+                cohortId: form.cohortId,
+                organizationId: cohort?.organization_id || user?.organizationId || '',
+            });
+            setShowCreate(false);
+            setForm({ name: '', endDate: '', cohortId: '' });
+            setError('');
+        } catch (err) {
+            setError(err?.error || 'Failed to create course');
+        } finally {
+            setCreating(false);
+        }
     };
 
     const statusBadge = (status) => {
@@ -97,15 +108,15 @@ const Courses = () => {
                             <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
                                 <div className="flex items-center gap-2">
                                     <Calendar size={14} />
-                                    <span>Created: {course.createdDate}</span>
+                                    <span>Created: {course.created_at ? new Date(course.created_at).toLocaleDateString() : '—'}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock size={14} />
-                                    <span>Ends: {course.endDate}</span>
+                                    <span>Ends: {course.end_date ? new Date(course.end_date).toLocaleDateString() : '—'}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Users size={14} />
-                                    <span>{course.teams.length} team{course.teams.length !== 1 ? 's' : ''}</span>
+                                    <span>{course.team_count ?? 0} team{(course.team_count ?? 0) !== 1 ? 's' : ''}</span>
                                 </div>
                             </div>
 
@@ -154,6 +165,19 @@ const Courses = () => {
                                     className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                                 />
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Cohort</label>
+                                <select
+                                    value={form.cohortId}
+                                    onChange={(e) => setForm({ ...form, cohortId: e.target.value })}
+                                    className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                                >
+                                    <option value="">Select a cohort</option>
+                                    {cohorts.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button
                                     onClick={() => setShowCreate(false)}
@@ -163,9 +187,10 @@ const Courses = () => {
                                 </button>
                                 <button
                                     onClick={handleCreate}
-                                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                                    disabled={creating}
+                                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
                                 >
-                                    Create
+                                    {creating ? 'Creating...' : 'Create'}
                                 </button>
                             </div>
                         </div>

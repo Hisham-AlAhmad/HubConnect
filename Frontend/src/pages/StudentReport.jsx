@@ -315,10 +315,10 @@ function StudentReportDetail() {
                       {new Date(log.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">
-                      {log.checkInTime ? new Date(log.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                      {log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--'}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">
-                      {log.checkOutTime ? new Date(log.checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                      {log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--'}
                     </td>
                     <td className="px-5 py-4 text-sm font-medium text-gray-900 dark:text-white">{log.hours ? `${log.hours}h` : '--'}</td>
                     <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{log.notes || '--'}</td>

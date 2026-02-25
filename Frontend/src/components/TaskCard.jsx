@@ -8,7 +8,7 @@ import { formatDate, getDaysRemaining, getStatusColor } from '../utils/helpers';
  */
 const TaskCard = ({ task }) => {
   const navigate = useNavigate();
-  const daysRemaining = getDaysRemaining(task.deadline);
+  const daysRemaining = getDaysRemaining(task.due_date);
 
   const handleCardClick = () => {
     navigate(`/tasks/${task.id}`);
@@ -57,7 +57,7 @@ const TaskCard = ({ task }) => {
           {/* Deadline */}
           <div className="flex items-center space-x-1">
             <Calendar size={16} className="text-gray-400" />
-            <span className="text-gray-600 dark:text-gray-400">{formatDate(task.deadline)}</span>
+            <span className="text-gray-600 dark:text-gray-400">{formatDate(task.due_date)}</span>
           </div>
 
           {/* Days remaining */}
@@ -69,15 +69,15 @@ const TaskCard = ({ task }) => {
 
         {/* Assignment type */}
         <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
-          {task.assignedTo === 'team' ? (
+          {task.team_id != null ? (
             <>
               <Users size={16} />
-              <span className="text-xs">Team</span>
+              <span className="text-xs">{task.team_name || 'Team'}</span>
             </>
           ) : (
             <>
               <User size={16} />
-              <span className="text-xs">Individual</span>
+              <span className="text-xs">{task.assignee_name || 'Individual'}</span>
             </>
           )}
         </div>

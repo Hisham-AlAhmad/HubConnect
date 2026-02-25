@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useCourse } from '../context/CourseContext';
 import ChatBox from '../components/ChatBox';
-import { MessageSquare, Users, Globe, Briefcase, Hash } from 'lucide-react';
+import { chatAPI } from '../services/api';
+import { MessageSquare, Users, Globe, Briefcase, Hash, Loader } from 'lucide-react';
 
 /**
  * Chat Page
  * Tabbed chat: General, Course-level, Team-level.
- * Respects cohort isolation (filtered server-side in production).
+ * Fetches real room UUIDs from the backend so Socket.io and REST
+ * message persistence work correctly.
  */
 const Chat = () => {
   const { user } = useAuth();
-  const { activeCourse, getLeadingTeam } = useCourse();
+  const { activeCourse } = useCourse();
   const [activeTab, setActiveTab] = useState('general');
+  const [rooms, setRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
 
   const tabs = [
     { id: 'general', label: 'General', icon: Globe },
@@ -20,22 +24,42 @@ const Chat = () => {
     { id: 'team', label: 'Team', icon: Hash },
   ];
 
-  // Resolve room IDs
+  // Fetch all accessible rooms from the backend
+  useEffect(() => {
+    chatAPI.getRooms()
+      .then((res) => { if (res?.success) setRooms(res.data ?? []); })
+      .catch(() => {})
+      .finally(() => setLoadingRooms(false));
+  }, []);
+
+  // Resolve the real room UUID for the currently active tab
   const getRoomId = () => {
-    if (activeTab === 'general') return 'general';
-    if (activeTab === 'course' && activeCourse) return `crs_${activeCourse.id}`;
-    if (activeTab === 'team' && user.teamId) return `team_${user.teamId}`;
+    if (activeTab === 'general') {
+      return rooms.find((r) => r.room_type === 'general')?.id ?? null;
+    }
+    if (activeTab === 'course' && activeCourse) {
+      return rooms.find((r) => r.room_type === 'course' && r.course_id === activeCourse.id)?.id ?? null;
+    }
+    if (activeTab === 'team') {
+      const teamId = user?.teamId;
+      if (!teamId) return null;
+      return rooms.find((r) => r.room_type === 'team' && r.team_id === teamId)?.id ?? null;
+    }
     return null;
   };
 
   const roomId = getRoomId();
 
   const noRoomMessage = () => {
+    if (loadingRooms) return null;
     if (activeTab === 'course' && !activeCourse) {
       return { title: 'No Active Course', desc: 'Join or create a course to use course chat.' };
     }
-    if (activeTab === 'team' && !user.teamId) {
+    if (activeTab === 'team' && !user?.teamId) {
       return { title: 'No Team Assigned', desc: 'You need to be part of a team to access team chat.' };
+    }
+    if (!roomId) {
+      return { title: 'No Chat Room Found', desc: 'A chat room for this channel has not been created yet.' };
     }
     return null;
   };
@@ -71,7 +95,11 @@ const Chat = () => {
       </div>
 
       {/* Chat area */}
-      {msg ? (
+      {loadingRooms ? (
+        <div className="flex items-center justify-center h-[calc(100vh-16rem)]">
+          <Loader size={32} className="animate-spin text-primary-500" />
+        </div>
+      ) : msg ? (
         <div className="flex items-center justify-center h-[calc(100vh-16rem)]">
           <div className="text-center">
             <Users size={64} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />

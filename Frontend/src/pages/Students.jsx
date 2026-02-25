@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useCohort } from '../context/CohortContext';
-import { teamAPI } from '../services/api';
+import { teamAPI, authAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 import {
     Users, Search, Mail, Shield, User, Crown, Filter,
-    ChevronDown, GraduationCap
+    ChevronDown, GraduationCap, Plus, X
 } from 'lucide-react';
 
 /**
@@ -13,27 +13,73 @@ import {
  * Admin/Instructor can view all students, filter by cohort, and see details.
  */
 
-/* ── Demo student data (mirrors AuthContext + extras) ─────── */
-const MOCK_STUDENTS = [
-    { id: '3', name: 'Student User', email: 'student@hub.com', role: 'student', teamId: 't1', cohortId: 'coh-1', status: 'active' },
-    { id: '4', name: 'Team Leader User', email: 'leader@hub.com', role: 'team_leader', teamId: 't1', cohortId: 'coh-1', status: 'active' },
-    { id: '5', name: 'Sarah Ahmed', email: 'sarah@hub.com', role: 'student', teamId: 't2', cohortId: 'coh-1', status: 'active' },
-    { id: '6', name: 'Omar Hassan', email: 'omar@hub.com', role: 'student', teamId: 't2', cohortId: 'coh-1', status: 'active' },
-    { id: '10', name: 'Layla Khalid', email: 'layla@hub.com', role: 'student', teamId: null, cohortId: 'coh-2', status: 'inactive' },
-    { id: '11', name: 'Yousef Ali', email: 'yousef@hub.com', role: 'student', teamId: null, cohortId: 'coh-2', status: 'inactive' },
-];
+const DEFAULT_PASSWORD = '123456789';
 
 const Students = () => {
     const { user, hasRole } = useAuth();
     const { cohorts } = useCohort();
-    const [students] = useState(MOCK_STUDENTS);
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [cohortFilter, setCohortFilter] = useState('all');
 
+    // Create modal state
+    const [showCreate, setShowCreate] = useState(false);
+    const [createForm, setCreateForm] = useState({ name: '', email: '', password: DEFAULT_PASSWORD, cohortId: '' });
+    const [createLoading, setCreateLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const fetchStudents = async () => {
+        try {
+            setLoading(true);
+            const res = await teamAPI.getAllStudents();
+            setStudents(Array.isArray(res?.data) ? res.data : []);
+        } catch (err) {
+            console.error('Error fetching students:', err);
+            setStudents([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchStudents(); }, []);
+
+    const handleCreateSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (!createForm.name.trim() || !createForm.email.trim()) {
+            setError('Name and email are required');
+            return;
+        }
+        if (!createForm.cohortId) {
+            setError('Please select a cohort');
+            return;
+        }
+        try {
+            setCreateLoading(true);
+            await authAPI.register({
+                name: createForm.name.trim(),
+                email: createForm.email.trim() + '@hub.com',
+                password: createForm.password || DEFAULT_PASSWORD,
+                role: 'student',
+                cohortId: createForm.cohortId,
+            });
+            setShowCreate(false);
+            setCreateForm({ name: '', email: '', password: DEFAULT_PASSWORD, cohortId: '' });
+            await fetchStudents();
+        } catch (err) {
+            setError(err?.response?.data?.error || err.message || 'Failed to create student');
+        } finally {
+            setCreateLoading(false);
+        }
+    };
+
     const filtered = students.filter((s) => {
-        const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
-            s.email.toLowerCase().includes(search.toLowerCase());
-        const matchesCohort = cohortFilter === 'all' || s.cohortId === cohortFilter;
+        const name = (s.full_name || '').toLowerCase();
+        const email = (s.email || '').toLowerCase();
+        const q = search.toLowerCase();
+        const matchesSearch = name.includes(q) || email.includes(q);
+        const matchesCohort = cohortFilter === 'all' || s.cohort_id === cohortFilter;
         return matchesSearch && matchesCohort;
     });
 
@@ -42,10 +88,13 @@ const Students = () => {
         return { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', label: 'Student', icon: User };
     };
 
-    const statusDot = (status) => {
-        if (status === 'active') return 'bg-green-500';
-        return 'bg-gray-400';
-    };
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -56,6 +105,14 @@ const Students = () => {
                     View and manage all enrolled students
                 </p>
             </div>
+
+            <button
+                    onClick={() => { setShowCreate(true); setError(''); }}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                >
+                <Plus className="w-4 h-4" />
+                New Student
+            </button>
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3">
@@ -91,8 +148,8 @@ const Students = () => {
                     <p className="text-2xl font-bold text-gray-800 dark:text-white">{filtered.length}</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Active</p>
-                    <p className="text-2xl font-bold text-green-600">{filtered.filter((s) => s.status === 'active').length}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">In Teams</p>
+                    <p className="text-2xl font-bold text-green-600">{filtered.filter((s) => s.team_id).length}</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">Team Leaders</p>
@@ -100,7 +157,7 @@ const Students = () => {
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">Unassigned</p>
-                    <p className="text-2xl font-bold text-orange-600">{filtered.filter((s) => !s.teamId).length}</p>
+                    <p className="text-2xl font-bold text-orange-600">{filtered.filter((s) => !s.team_id).length}</p>
                 </div>
             </div>
 
@@ -121,21 +178,19 @@ const Students = () => {
                                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
                                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cohort</th>
                                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Team</th>
-                                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {filtered.map((student) => {
                                     const badge = getRoleBadge(student.role);
                                     const BadgeIcon = badge.icon;
-                                    const cohort = cohorts.find((c) => c.id === student.cohortId);
                                     return (
                                         <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center gap-3">
-                                                    <Avatar name={student.name} size={36} role={student.role} />
+                                                    <Avatar name={student.full_name || 'Unknown'} size={36} role={student.role} />
                                                     <div>
-                                                        <p className="font-medium text-gray-800 dark:text-white text-sm">{student.name}</p>
+                                                        <p className="font-medium text-gray-800 dark:text-white text-sm">{student.full_name || 'Unknown'}</p>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">{student.email}</p>
                                                     </div>
                                                 </div>
@@ -146,16 +201,10 @@ const Students = () => {
                                                 </span>
                                             </td>
                                             <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
-                                                {cohort?.name || '—'}
+                                                {student.cohort_name || '—'}
                                             </td>
                                             <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
-                                                {student.teamId || 'Unassigned'}
-                                            </td>
-                                            <td className="py-3 px-4">
-                                                <span className="inline-flex items-center gap-1.5">
-                                                    <span className={`w-2 h-2 rounded-full ${statusDot(student.status)}`} />
-                                                    <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">{student.status}</span>
-                                                </span>
+                                                {student.team_name || 'Unassigned'}
                                             </td>
                                         </tr>
                                     );
@@ -165,6 +214,58 @@ const Students = () => {
                     </div>
                 )}
             </div>
+
+            {/* Create Student Modal */}
+            {showCreate && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+                        <div className="flex items-center justify-between p-5 border-b dark:border-gray-700">
+                            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">New Student</h2>
+                            <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleCreateSubmit} className="p-5 space-y-4">
+                            {error && (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">{error}</div>
+                            )}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name *</label>
+                                <input type="text" value={createForm.name} onChange={(e) => setCreateForm(f => ({ ...f, name: e.target.value }))} required placeholder="Enter full name"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email *</label>
+                                <div className="flex">
+                                    <input type="text" value={createForm.email} onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value.replace(/[@.]/g, '') }))} required placeholder="username"
+                                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-l-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
+                                    <span className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-lg bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-sm">@hub.com</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cohort *</label>
+                                <select value={createForm.cohortId} onChange={(e) => setCreateForm(f => ({ ...f, cohortId: e.target.value }))} required
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm">
+                                    <option value="">Select a cohort...</option>
+                                    {cohorts.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                                <input type="text" value={createForm.password} onChange={(e) => setCreateForm(f => ({ ...f, password: e.target.value }))}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm" />
+                                <p className="text-xs text-gray-400 mt-1">Default: {DEFAULT_PASSWORD}</p>
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm" disabled={createLoading}>Cancel</button>
+                                <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium" disabled={createLoading}>
+                                    {createLoading ? 'Creating...' : 'Create Student'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

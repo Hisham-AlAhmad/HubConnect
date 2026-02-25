@@ -52,7 +52,7 @@ const Profile = () => {
     }
     try {
       setProfileLoading(true); setProfileError('');
-      const res = await authAPI.updateProfile(user.id, profileForm);
+      const res = await authAPI.updateProfile(profileForm);
       if (updateUser) updateUser(profileForm);
       setProfileSuccess('Profile updated successfully!');
       setTimeout(() => setProfileSuccess(''), 3000);
@@ -66,7 +66,7 @@ const Profile = () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) { setPasswordError('New passwords do not match'); return; }
     try {
       setPasswordLoading(true);
-      await authAPI.changePassword(user.id, { currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword });
+      await authAPI.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
       setPasswordSuccess('Password changed successfully!');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setTimeout(() => setPasswordSuccess(''), 3000);

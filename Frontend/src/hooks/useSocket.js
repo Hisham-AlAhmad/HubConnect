@@ -1,15 +1,32 @@
-import { useState, useEffect, useRef } from 'react';
-import { MockSocket } from '../services/socket';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { initializeSocket } from '../services/socket';
+import { chatAPI } from '../services/api';
 import { useAuth } from './useAuth';
 
 /**
- * Custom hook for Socket.io functionality
- * Manages socket connection and provides methods for sending/receiving messages
- * @param {string} roomId - Chat room ID (usually teamId)
+ * Normalize a raw DB message row into the shape ChatBox expects.
+ */
+const normalizeMsg = (m) => ({
+  id: m.id,
+  userId: m.sender_id,
+  userName: m.sender_name || 'Unknown',
+  userAvatar: m.sender_avatar,
+  message: m.content,
+  timestamp: m.created_at,
+});
+
+/**
+ * Custom hook for Socket.io + REST chat functionality.
+ * - Loads message history from REST API on mount / roomId change.
+ * - Maintains real Socket.io connection for real-time typing indicators
+ *   and incoming messages from other users.
+ * - Persists outgoing messages via REST (which also broadcasts via socket).
+ *
+ * @param {string} roomId - Chat room UUID from the backend
  * @returns {object} Socket state and methods
  */
 export const useSocket = (roomId) => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -17,114 +34,96 @@ export const useSocket = (roomId) => {
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Initialize socket connection
+  // ── Load message history from REST whenever roomId changes ──
   useEffect(() => {
-    if (!user || !roomId) return;
+    if (!roomId) { setMessages([]); return; }
+    chatAPI.getMessages(roomId)
+      .then((res) => {
+        if (res?.success) setMessages((res.data ?? []).map(normalizeMsg));
+      })
+      .catch(() => {/* silently fail – socket will still work */});
+  }, [roomId]);
 
-    // Create mock socket instance
-    const socket = new MockSocket(user.id, user.name);
+  // ── Manage real Socket.io connection ────────────────────────
+  useEffect(() => {
+    if (!user || !token) return;
+
+    const socket = initializeSocket(token);
     socketRef.current = socket;
-
-    // Connect to socket
     socket.connect();
-    setConnected(true);
 
-    // Join room
-    socket.emit('join_room', { roomId });
+    socket.on('connect', () => setConnected(true));
+    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect_error', () => setConnected(false));
 
-    // Listen for events
-    socket.on('room_joined', (data) => {
-      setMessages(data.messages || []);
-      setOnlineUsers(data.users || []);
-    });
-
-    socket.on('receive_message', (message) => {
-      setMessages(prev => [...prev, message]);
-    });
-
-    socket.on('user_online', (data) => {
-      setOnlineUsers(prev => {
-        if (prev.find(u => u.id === data.userId)) return prev;
-        return [...prev, { id: data.userId, name: data.userName, online: true }];
-      });
-    });
-
-    socket.on('user_offline', (data) => {
-      setOnlineUsers(prev => prev.filter(u => u.id !== data.userId));
+    // Incoming messages from other users (own messages are added after REST POST)
+    socket.on('receive_message', (msg) => {
+      if (msg.sender_id !== user.id) {
+        setMessages((prev) => [...prev, normalizeMsg(msg)]);
+      }
     });
 
     socket.on('user_typing', (data) => {
       if (data.userId !== user.id) {
-        setTypingUsers(prev => {
-          if (prev.find(u => u.id === data.userId)) return prev;
-          return [...prev, { id: data.userId, name: data.userName }];
+        setTypingUsers((prev) => {
+          if (prev.find((u) => u.id === data.userId)) return prev;
+          return [...prev, { id: data.userId, name: data.name }];
         });
       }
     });
 
     socket.on('user_stop_typing', (data) => {
-      setTypingUsers(prev => prev.filter(u => u.id !== data.userId));
+      setTypingUsers((prev) => prev.filter((u) => u.id !== data.userId));
     });
 
-    // Cleanup on unmount
     return () => {
       if (socketRef.current) {
-        socketRef.current.emit('leave_room', { roomId });
         socketRef.current.disconnect();
       }
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [user, roomId]);
+  }, [user, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Send message to chat room
-   * @param {string} message - Message text
-   */
-  const sendMessage = (message) => {
-    if (!socketRef.current || !message.trim()) return;
+  // ── Join / leave room when roomId changes ───────────────────
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !roomId) return;
+    socket.emit('join_room', { roomId });
+    return () => socket.emit('leave_room', { roomId });
+  }, [roomId]);
 
-    socketRef.current.emit('send_message', {
-      roomId,
-      message: message.trim()
-    });
-
-    // Stop typing indicator
+  // ── Send message via REST API (which broadcasts via socket) ─
+  const sendMessage = useCallback(async (content) => {
+    if (!content.trim() || !roomId) return;
+    try {
+      const res = await chatAPI.sendMessage(roomId, content);
+      if (res?.success) {
+        setMessages((prev) => [...prev, normalizeMsg(res.data)]);
+      }
+    } catch (err) {
+      console.error('Send message failed:', err);
+    }
     stopTyping();
-  };
+  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const stopTyping = useCallback(() => {
+    const socket = socketRef.current;
+    if (socket && roomId) socket.emit('stop_typing', { roomId });
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+  }, [roomId]);
 
   /**
    * Send typing indicator
    */
   const startTyping = () => {
-    if (!socketRef.current) return;
-
-    socketRef.current.emit('typing', { roomId });
-
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    // Auto-stop typing after 3 seconds
-    typingTimeoutRef.current = setTimeout(() => {
-      stopTyping();
-    }, 3000);
-  };
-
-  /**
-   * Stop typing indicator
-   */
-  const stopTyping = () => {
-    if (!socketRef.current) return;
-
-    socketRef.current.emit('stop_typing', { roomId });
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
+    const socket = socketRef.current;
+    if (!socket || !roomId) return;
+    socket.emit('typing', { roomId });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => stopTyping(), 3000);
   };
 
   return {
@@ -134,8 +133,9 @@ export const useSocket = (roomId) => {
     connected,
     sendMessage,
     startTyping,
-    stopTyping
+    stopTyping,
   };
 };
 
 export default useSocket;
+

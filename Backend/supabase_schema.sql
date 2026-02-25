@@ -51,6 +51,10 @@ CREATE TABLE profiles (
     avatar_url VARCHAR(500),
     phone_number VARCHAR(20),
     bio TEXT,
+    role VARCHAR(50) NOT NULL DEFAULT 'student',
+    password_hash VARCHAR(255),
+    reset_token TEXT,
+    reset_token_expires_at TIMESTAMP WITH TIME ZONE,
     theme_preference VARCHAR(50) DEFAULT 'light',
     notifications_enabled BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -584,11 +588,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function: Set created_by on insert
+-- Function: Set created_by on insert (only if not explicitly provided)
 CREATE OR REPLACE FUNCTION set_created_by()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.created_by = auth.uid();
+    NEW.created_by = COALESCE(NEW.created_by, auth.uid());
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -736,8 +740,7 @@ CREATE TRIGGER set_submission_files_created_by BEFORE INSERT ON submission_files
 CREATE TRIGGER set_chat_rooms_created_by BEFORE INSERT ON chat_rooms
     FOR EACH ROW EXECUTE FUNCTION set_created_by();
 
-CREATE TRIGGER set_messages_created_by BEFORE INSERT ON messages
-    FOR EACH ROW EXECUTE FUNCTION set_created_by();
+-- messages uses sender_id instead of created_by — no trigger needed
 
 CREATE TRIGGER set_notifications_created_by BEFORE INSERT ON notifications
     FOR EACH ROW EXECUTE FUNCTION set_created_by();

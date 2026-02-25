@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { teamAPI } from '../services/api';
+import { teamAPI, courseAPI } from '../services/api';
 import { ROLES } from '../utils/constants';
 import {
   Users, Mail, Shield, User, Crown, Plus, Pencil, Trash2, UserPlus, UserMinus,
-  X, Check, AlertCircle, CheckCircle
+  X, Check, AlertCircle, CheckCircle, ChevronDown
 } from 'lucide-react';
 import { getInitials, getAvatarColor } from '../utils/helpers';
 
@@ -19,6 +19,7 @@ const Teams = () => {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
+  const [allCourses, setAllCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
@@ -30,6 +31,7 @@ const Teams = () => {
 
   // Form state
   const [teamName, setTeamName] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -40,7 +42,7 @@ const Teams = () => {
     try {
       setLoading(true);
       const response = await teamAPI.getAllTeams();
-      const teamsData = response.data;
+      const teamsData = Array.isArray(response?.data) ? response.data : [];
       setTeams(teamsData);
 
       if (selectedTeam) {
@@ -48,23 +50,25 @@ const Teams = () => {
         if (updated) setSelectedTeam(updated);
         else if (teamsData.length > 0) setSelectedTeam(teamsData[0]);
         else setSelectedTeam(null);
-      } else if (user.teamId) {
+      } else if (user?.teamId) {
         const userTeam = teamsData.find((t) => t.id === user.teamId);
-        setSelectedTeam(userTeam || teamsData[0]);
+        setSelectedTeam(userTeam || teamsData[0] || null);
       } else {
         setSelectedTeam(teamsData[0] || null);
       }
     } catch (err) {
       console.error('Error fetching teams:', err);
+      setTeams([]);
     } finally {
       setLoading(false);
     }
-  }, [user.teamId]);
+  }, [user?.teamId]);
 
   useEffect(() => {
     fetchTeams();
     if (canEdit) {
-      teamAPI.getAllStudents().then(res => setAllStudents(res.data)).catch(() => { });
+      teamAPI.getAllStudents().then(res => setAllStudents(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
+      courseAPI.getAll().then(res => setAllCourses(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
     }
   }, [fetchTeams, canEdit]);
 
@@ -80,9 +84,10 @@ const Teams = () => {
     try {
       setLoadingMembers(true);
       const response = await teamAPI.getTeamMembers(teamId);
-      setTeamMembers(response.data);
+      setTeamMembers(Array.isArray(response?.data) ? response.data : []);
     } catch (err) {
       console.error('Error fetching team members:', err);
+      setTeamMembers([]);
     } finally {
       setLoadingMembers(false);
     }
@@ -94,16 +99,22 @@ const Teams = () => {
   };
 
   const handleCreateTeam = async () => {
-    if (!teamName.trim()) return;
+    if (!teamName.trim() || !selectedCourseId) return;
     try {
       setActionLoading(true);
-      await teamAPI.createTeam({ name: teamName.trim() });
+      const course = allCourses.find(c => c.id === selectedCourseId);
+      await teamAPI.createTeam({
+        name: teamName.trim(),
+        courseId: selectedCourseId,
+        organizationId: course?.organization_id || user?.organizationId || '',
+      });
       setShowCreateModal(false);
       setTeamName('');
+      setSelectedCourseId('');
       showMessage('Team created successfully!');
       await fetchTeams();
     } catch (err) {
-      showMessage('Failed to create team', true);
+      showMessage(err?.error || 'Failed to create team', true);
     } finally {
       setActionLoading(false);
     }
@@ -148,7 +159,7 @@ const Teams = () => {
       showMessage('Member added!');
       await fetchTeams();
       await fetchTeamMembers(selectedTeam.id);
-      teamAPI.getAllStudents().then(res => setAllStudents(res.data)).catch(() => { });
+      teamAPI.getAllStudents().then(res => setAllStudents(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
     } catch (err) {
       showMessage('Failed to add member', true);
     }
@@ -161,7 +172,7 @@ const Teams = () => {
       showMessage('Member removed');
       await fetchTeams();
       await fetchTeamMembers(selectedTeam.id);
-      teamAPI.getAllStudents().then(res => setAllStudents(res.data)).catch(() => { });
+      teamAPI.getAllStudents().then(res => setAllStudents(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
     } catch (err) {
       showMessage('Failed to remove member', true);
     }
@@ -178,8 +189,9 @@ const Teams = () => {
   };
 
   // Unassigned students (not in any team)
+  const memberUserIds = teamMembers.map(m => m.user_id);
   const unassignedStudents = allStudents.filter(s =>
-    !teams.some(t => t.members.includes(s.id))
+    !s.team_id && !memberUserIds.includes(s.id)
   );
 
   if (loading) {
@@ -259,7 +271,7 @@ const Teams = () => {
                           {team.name}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {team.members.length} members
+                          {team.member_count ?? 0} members
                         </p>
                       </div>
                       {user.teamId === team.id && (
@@ -294,7 +306,7 @@ const Teams = () => {
                         {selectedTeam.name}
                       </h2>
                       <p className="text-gray-600 dark:text-gray-400">
-                        {selectedTeam.members.length} team members
+                        {selectedTeam.member_count ?? 0} team members
                       </p>
                     </div>
                   </div>
@@ -351,29 +363,31 @@ const Teams = () => {
                     {teamMembers.map((member) => {
                       const badge = getRoleBadge(member.role);
                       const BadgeIcon = badge.icon;
+                      const memberName = member.full_name || member.name || 'Unknown';
+                      const memberId = member.user_id || member.id;
 
                       return (
                         <div
-                          key={member.id}
+                          key={memberId}
                           className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                         >
                           {/* Avatar */}
                           <div
                             className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold"
                             style={{
-                              backgroundColor: getAvatarColor(member.name)
+                              backgroundColor: getAvatarColor(memberName)
                             }}
                           >
-                            {getInitials(member.name)}
+                            {getInitials(memberName)}
                           </div>
 
                           {/* Member info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center space-x-2 mb-1">
                               <p className="font-semibold text-gray-800 dark:text-white truncate">
-                                {member.name}
+                                {memberName}
                               </p>
-                              {member.id === user.id && (
+                              {memberId === user.id && (
                                 <span className="px-2 py-0.5 bg-primary-100 text-primary-700 text-xs font-medium rounded">
                                   You
                                 </span>
@@ -398,7 +412,7 @@ const Teams = () => {
                           {/* Remove button */}
                           {canEdit && (
                             <button
-                              onClick={() => handleRemoveMember(member.id)}
+                              onClick={() => handleRemoveMember(memberId)}
                               className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                               title="Remove from team"
                             >
@@ -435,16 +449,31 @@ const Teams = () => {
                 </button>
               </div>
             </div>
-            <div className="p-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Team Name</label>
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                placeholder="Enter team name"
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-                autoFocus
-              />
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Team Name</label>
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  placeholder="Enter team name"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Course</label>
+                <select
+                  value={selectedCourseId}
+                  onChange={(e) => setSelectedCourseId(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                >
+                  <option value="">Select a course</option>
+                  {allCourses.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name || c.title}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
               <button
@@ -455,7 +484,7 @@ const Teams = () => {
               </button>
               <button
                 onClick={handleCreateTeam}
-                disabled={!teamName.trim() || actionLoading}
+                disabled={!teamName.trim() || !selectedCourseId || actionLoading}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
               >
                 {actionLoading ? 'Creating...' : 'Create Team'}
@@ -523,7 +552,7 @@ const Teams = () => {
               </div>
               <p className="text-gray-600 dark:text-gray-400 text-sm">
                 Are you sure you want to delete <strong>{selectedTeam?.name}</strong>?
-                All {selectedTeam?.members.length || 0} member(s) will be unassigned.
+                All {selectedTeam?.member_count || 0} member(s) will be unassigned.
               </p>
             </div>
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
@@ -571,12 +600,12 @@ const Teams = () => {
                       <div className="flex items-center gap-3">
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                          style={{ backgroundColor: getAvatarColor(s.name) }}
+                          style={{ backgroundColor: getAvatarColor(s.full_name || s.name || '') }}
                         >
-                          {getInitials(s.name)}
+                          {getInitials(s.full_name || s.name || '')}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-800 dark:text-white">{s.name}</p>
+                          <p className="text-sm font-medium text-gray-800 dark:text-white">{s.full_name || s.name}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">{s.email}</p>
                         </div>
                       </div>

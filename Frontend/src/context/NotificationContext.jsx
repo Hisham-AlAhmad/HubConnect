@@ -1,5 +1,6 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { notificationAPI } from '../services/api';
+import AuthContext from './AuthContext';
 
 // Create Notification Context
 export const NotificationContext = createContext(null);
@@ -12,38 +13,54 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const user = null;
+  const { user } = useContext(AuthContext);
 
-  // Fetch notifications when user is authenticated
+  /**
+   * Fetch notifications from API
+   */
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await notificationAPI.getNotifications();
+      if (res?.success) {
+        // Backend returns { success, data: { notifications: [...], unreadCount: N } }
+        // Normalize: add .read boolean so components don't need to check .status === 'read'
+        const normalized = (res.data?.notifications ?? []).map(n => ({
+          ...n,
+          read: n.status !== 'unread',
+        }));
+        setNotifications(normalized);
+        setUnreadCount(res.data?.unreadCount ?? 0);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Fetch notifications when user logs in / changes
   useEffect(() => {
-    // No notifications without backend
-  }, []);
+    fetchNotifications();
+  }, [fetchNotifications]);
 
-  // Update unread count when notifications change
+  // Keep unreadCount in sync with local state
   useEffect(() => {
     const count = notifications.filter(n => !n.read).length;
     setUnreadCount(count);
   }, [notifications]);
 
   /**
-   * Fetch notifications from API
-   */
-  const fetchNotifications = async () => {
-    // No backend
-  };
-
-  /**
    * Mark notification as read
-   * @param {number} notificationId - Notification ID
+   * @param {string} notificationId - Notification ID
    */
   const markAsRead = async (notificationId) => {
     try {
       await notificationAPI.markAsRead(notificationId);
-      
-      // Update local state
       setNotifications(prev =>
         prev.map(n =>
-          n.id === notificationId ? { ...n, read: true } : n
+          n.id === notificationId ? { ...n, status: 'read', read: true } : n
         )
       );
     } catch (error) {
@@ -56,12 +73,11 @@ export const NotificationProvider = ({ children }) => {
    */
   const markAllAsRead = async () => {
     try {
-      await notificationAPI.markAllAsRead(user.id);
-      
-      // Update local state
+      await notificationAPI.markAllAsRead();
       setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
+        prev.map(n => ({ ...n, status: 'read', read: true }))
       );
+      setUnreadCount(0);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }

@@ -14,6 +14,8 @@ import notificationsRoutes from './notifications.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import filesRoutes from './files.routes.js';
 import activityLogsRoutes from './activityLogs.routes.js';
+import attendanceRoutes from './attendance.routes.js';
+import reportsRoutes from './reports.routes.js';
 
 const router = Router();
 
@@ -31,5 +33,7 @@ router.use('/notifications', notificationsRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/files', filesRoutes);
 router.use('/activity-logs', activityLogsRoutes);
+router.use('/attendance', attendanceRoutes);
+router.use('/reports', reportsRoutes);
 
 export default router;

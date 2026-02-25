@@ -1,13 +1,30 @@
+import jwt from 'jsonwebtoken';
+import config from '../config/index.js';
+
 /**
- * Auth middleware placeholder.
- * Replace with real JWT / Supabase token verification.
+ * Authentication middleware.
+ * Verifies the Bearer JWT in the Authorization header.
+ * Attaches the decoded payload to req.user.
  */
-const authenticate = (req, _res, next) => {
-    // TODO: Verify Supabase JWT from Authorization header
-    // const token = req.headers.authorization?.split(' ')[1];
-    // const user = verifyToken(token);
-    // req.user = user;
-    next();
+const authenticate = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, error: 'No token provided.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    try {
+        const decoded = jwt.verify(token, config.jwtSecret);
+        req.user = decoded;
+        next();
+    } catch (err) {
+        const message = err.name === 'TokenExpiredError'
+            ? 'Token has expired.'
+            : 'Invalid token.';
+        return res.status(401).json({ success: false, error: message });
+    }
 };
 
 export default authenticate;

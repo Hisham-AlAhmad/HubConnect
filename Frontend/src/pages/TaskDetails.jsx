@@ -100,9 +100,9 @@ const TaskDetails = () => {
     );
   }
 
-  const daysRemaining = getDaysRemaining(task.deadline);
+  const daysRemaining = getDaysRemaining(task.due_date);
   const isOverdue = daysRemaining < 0;
-  const canSubmit = hasRole(['team_leader']) && !submission && task.assignedTo === 'team';
+  const canSubmit = hasRole(['team_leader']) && !submission && task.team_id != null;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -139,7 +139,7 @@ const TaskDetails = () => {
             {/* Deadline */}
             <div className="flex items-center space-x-2">
               <Calendar size={16} className="text-gray-400" />
-              <span className="text-gray-600 dark:text-gray-400">Due: {formatDate(task.deadline)}</span>
+              <span className="text-gray-600 dark:text-gray-400">Due: {formatDate(task.due_date)}</span>
             </div>
 
             {/* Days remaining */}
@@ -154,15 +154,15 @@ const TaskDetails = () => {
 
             {/* Assignment type */}
             <div className="flex items-center space-x-2">
-              {task.assignedTo === 'team' ? (
+              {task.team_id != null ? (
                 <>
                   <Users size={16} className="text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">Team Task</span>
+                  <span className="text-gray-600 dark:text-gray-400">{task.team_name || 'Team Task'}</span>
                 </>
               ) : (
                 <>
                   <User size={16} className="text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">Individual Task</span>
+                  <span className="text-gray-600 dark:text-gray-400">{task.assignee_name || 'Individual Task'}</span>
                 </>
               )}
             </div>
@@ -178,19 +178,19 @@ const TaskDetails = () => {
         </div>
 
         {/* GitHub Repository */}
-        {task.githubRepo && (
+        {task.github_repo_url && (
           <div className="p-6 border-b">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">
               GitHub Repository
             </h2>
             <a
-              href={task.githubRepo}
+              href={task.github_repo_url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center space-x-2 text-primary-600 hover:text-primary-700 font-medium"
             >
               <Github size={20} />
-              <span>{task.githubRepo}</span>
+              <span>{task.github_repo_url}</span>
             </a>
           </div>
         )}
@@ -210,18 +210,18 @@ const TaskDetails = () => {
                   <div className="space-y-2 text-sm text-green-700 dark:text-green-400">
                     <p>
                       <span className="font-medium">Submitted at:</span>{' '}
-                      {formatDateTime(submission.submittedAt)}
+                      {formatDateTime(submission.submitted_at)}
                     </p>
-                    {submission.githubLink && (
+                    {submission.github_link && (
                       <p>
                         <span className="font-medium">GitHub:</span>{' '}
                         <a
-                          href={submission.githubLink}
+                          href={submission.github_link}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="underline hover:text-green-900"
                         >
-                          {submission.githubLink}
+                          {submission.github_link}
                         </a>
                       </p>
                     )}
@@ -265,9 +265,9 @@ const TaskDetails = () => {
               ) : (
                 <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <p className="text-gray-600 dark:text-gray-400">
-                    {task.assignedTo === 'team'
+                    {task.team_id != null
                       ? 'Waiting for team leader to submit this task.'
-                      : 'This task has not been submitted yet.'}
+                      : 'This task has not been submitted yet.'}}
                   </p>
                 </div>
               )}

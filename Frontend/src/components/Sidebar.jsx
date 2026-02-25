@@ -61,11 +61,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       { name: 'Tasks', path: '/tasks', icon: ListTodo, roles: ['admin', 'instructor', 'student', 'team_leader'], end: true },
     );
 
-    // Create Task – admin, instructor, AND team_leader
-    if (hasRole(['admin', 'instructor', 'team_leader'])) {
-      academicItems.push({ name: 'Create Task', path: '/tasks/create', icon: PlusCircle, roles: ['admin', 'instructor', 'team_leader'] });
-    }
-
     sections.push({ label: 'Academic', items: academicItems });
 
     /* ── Users ─────────────────────────────────────────────── */

@@ -7,14 +7,23 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "seed": "node src/db/seed.js"
+    "seed": "node src/db/seed.js",
+    "migrate": "node src/db/migrate.js",
+    "init-db": "psql $DATABASE_URL -f init.sql"
   },
   "keywords": [],
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "postgres": "^3.4.8"
+    "express-rate-limit": "^7.5.0",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "postgres": "^3.4.8",
+    "socket.io": "^4.8.1"
   }
 }

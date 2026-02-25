@@ -71,20 +71,20 @@ export default function DailyReports() {
     return (diff / 3600000).toFixed(1);
   };
 
-  const filteredRecords = report?.records?.filter(r => {
+  const filteredRecords = report?.attendance?.records?.filter(r => {
     if (selectedTeam === 'all') return true;
-    return String(r.teamId) === selectedTeam;
+    return String(r.team_id) === selectedTeam;
   }) || [];
 
   const stats = {
     total: filteredRecords.length,
-    checkedOut: filteredRecords.filter(r => r.checkOutTime).length,
-    stillIn: filteredRecords.filter(r => !r.checkOutTime).length,
+    checkedOut: filteredRecords.filter(r => r.check_out_time).length,
+    stillIn: filteredRecords.filter(r => !r.check_out_time).length,
     avgHours: (() => {
-      const completed = filteredRecords.filter(r => r.checkOutTime);
+      const completed = filteredRecords.filter(r => r.check_out_time);
       if (completed.length === 0) return 0;
       const total = completed.reduce((sum, r) => {
-        return sum + (parseFloat(calculateHours(r.checkInTime, r.checkOutTime)) || 0);
+        return sum + (parseFloat(calculateHours(r.check_in_time, r.check_out_time)) || 0);
       }, 0);
       return (total / completed.length).toFixed(1);
     })()
@@ -123,11 +123,11 @@ export default function DailyReports() {
             const csv = [
               ['Name', 'Team', 'Check In', 'Check Out', 'Hours', 'Notes'].join(','),
               ...filteredRecords.map(r => [
-                r.userName,
-                r.teamName || '--',
-                formatTime(r.checkInTime),
-                r.checkOutTime ? formatTime(r.checkOutTime) : '--',
-                calculateHours(r.checkInTime, r.checkOutTime) || '--',
+                r.full_name,
+                r.team_name || '--',
+                formatTime(r.check_in_time),
+                r.check_out_time ? formatTime(r.check_out_time) : '--',
+                calculateHours(r.check_in_time, r.check_out_time) || '--',
                 `"${(r.notes || '').replace(/"/g, '""')}"`
               ].join(','))
             ].join('\n');
@@ -263,29 +263,29 @@ export default function DailyReports() {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredRecords.map((record) => {
-                  const hours = calculateHours(record.checkInTime, record.checkOutTime);
+                  const hours = calculateHours(record.check_in_time, record.check_out_time);
                   return (
                     <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
                             <span className="text-primary-700 font-medium text-sm">
-                              {record.userName?.charAt(0) || '?'}
+                              {record.full_name?.charAt(0) || '?'}
                             </span>
                           </div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{record.userName}</span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">{record.full_name}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{record.teamName || '--'}</td>
-                      <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{formatTime(record.checkInTime)}</td>
+                      <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{record.team_name || '--'}</td>
+                      <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{formatTime(record.check_in_time)}</td>
                       <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {record.checkOutTime ? formatTime(record.checkOutTime) : '--'}
+                        {record.check_out_time ? formatTime(record.check_out_time) : '--'}
                       </td>
                       <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400 font-medium">
                         {hours ? `${hours}h` : '--'}
                       </td>
                       <td className="px-5 py-4">
-                        {record.checkOutTime ? (
+                        {record.check_out_time ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                             <CheckCircle className="w-3 h-3" />
                             Complete

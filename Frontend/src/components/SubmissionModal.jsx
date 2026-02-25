@@ -62,7 +62,7 @@ const SubmissionModal = ({ task, isOpen, onClose, onSuccess }) => {
       setSubmitting(true);
 
       // Calculate submission status
-      const deadline = new Date(task.deadline);
+      const deadline = new Date(task.due_date);
       const now = new Date();
       const status = now <= deadline ? 'on_time' : 'late';
 

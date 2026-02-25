@@ -1,79 +1,113 @@
-import { createContext, useState, useEffect } from 'react';
+import { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authAPI } from '../services/api';
 
 // Create Auth Context
 export const AuthContext = createContext(null);
 
-// ── Local demo accounts (no backend needed) ────────────────
-const DEMO_USERS = [
-  { id: '1', email: 'admin@hub.com',      password: 'admin123', name: 'Admin User',       role: 'admin',       teamId: null },
-  { id: '2', email: 'instructor@hub.com', password: 'inst123',  name: 'Instructor User',  role: 'instructor',  teamId: null },
-  { id: '3', email: 'student@hub.com',    password: 'stud123',  name: 'Student User',     role: 'student',     teamId: 't1' },
-  { id: '4', email: 'leader@hub.com',     password: 'lead123',  name: 'Team Leader User', role: 'team_leader', teamId: 't1' },
-];
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser]     = useState(null);
+  const [token, setToken]   = useState(() => localStorage.getItem('hc_token'));
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Restore session from localStorage on mount
+  // ── Persist helpers ────────────────────────────────────────
+  const persistSession = (userObj, jwt) => {
+    setUser(userObj);
+    setToken(jwt);
+    localStorage.setItem('hc_token', jwt);
+    localStorage.setItem('hc_user', JSON.stringify(userObj));
+  };
+
+  const clearSession = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('hc_token');
+    localStorage.removeItem('hc_user');
+  };
+
+  // ── Restore session on mount & verify with backend ─────────
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('hc_user');
-      if (saved) setUser(JSON.parse(saved));
-    } catch (_) {}
-    setLoading(false);
-  }, []);
+    const restore = async () => {
+      const jwt     = localStorage.getItem('hc_token');
+      const saved   = localStorage.getItem('hc_user');
+      if (!jwt) { setLoading(false); return; }
+
+      // Optimistic restore so UI renders immediately
+      if (saved) {
+        try { setUser(JSON.parse(saved)); } catch (_) {}
+      }
+
+      // Validate token against backend
+      try {
+        const res = await authAPI.me();
+        if (res?.success && res.data) {
+          // /auth/me returns { success, data: { user: {...} } }
+          const userObj = res.data.user ?? res.data;
+          setUser(userObj);
+          localStorage.setItem('hc_user', JSON.stringify(userObj));
+        } else {
+          clearSession();
+        }
+      } catch (_) {
+        // 401 interceptor in api.js already cleared storage + will redirect
+        clearSession();
+      } finally {
+        setLoading(false);
+      }
+    };
+    restore();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Login ──────────────────────────────────────────────────
-  const login = async (email, password) => {
-    const match = DEMO_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
-    if (!match) {
-      return { success: false, error: 'Invalid email or password.' };
-    }
-    const { password: _pw, ...profile } = match;
-    setUser(profile);
-    localStorage.setItem('hc_user', JSON.stringify(profile));
+  const login = useCallback(async (email, password) => {
+    try {
+      const res = await authAPI.login(email, password);
+      if (!res?.success) {
+        return { success: false, error: res?.error || 'Login failed.' };
+      }
+      const { user: userObj, token: jwt } = res.data;
+      persistSession(userObj, jwt);
 
-    if (profile.role === 'admin' || profile.role === 'instructor') {
-      navigate('/dashboard');
-    } else {
-      navigate('/tasks');
+      if (userObj.role === 'admin' || userObj.role === 'instructor') {
+        navigate('/dashboard');
+      } else {
+        navigate('/tasks');
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err?.error || 'Invalid email or password.' };
     }
-    return { success: true };
-  };
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Logout ─────────────────────────────────────────────────
-  const logout = async () => {
-    setUser(null);
-    localStorage.removeItem('hc_user');
+  const logout = useCallback(async () => {
+    try { await authAPI.logout(); } catch (_) {}
+    clearSession();
     navigate('/login');
-  };
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Role helpers ───────────────────────────────────────────
-  const hasRole = (roles) => {
+  const hasRole = useCallback((roles) => {
     if (!user) return false;
     if (Array.isArray(roles)) return roles.includes(user.role);
     return user.role === roles;
-  };
+  }, [user]);
 
-  const isAuthenticated = () => !!user;
+  const isAuthenticated = useCallback(() => !!user, [user]);
 
   // ── Update local user state after profile edit ─────────────
-  const updateUser = (updatedData) => {
+  const updateUser = useCallback((updatedData) => {
     setUser((prev) => {
       const next = { ...prev, ...updatedData };
       localStorage.setItem('hc_user', JSON.stringify(next));
       return next;
     });
-  };
+  }, []);
 
   const value = {
     user,
-    token: user ? 'local-token' : null,
+    token,
     loading,
     login,
     logout,

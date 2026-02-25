@@ -225,15 +225,15 @@ const AdminDashboard = ({ user }) => {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {recentSubmissions.map((s) => (
                   <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="py-3 font-medium text-gray-800 dark:text-white">{s.taskId?.slice(0, 8)}…</td>
+                    <td className="py-3 font-medium text-gray-800 dark:text-white">{s.task_id?.slice(0, 8)}…</td>
                     <td className="py-3">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${s.status === 'on_time' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {s.status === 'on_time' ? 'On Time' : 'Late'}
                       </span>
                     </td>
-                    <td className="py-3 text-gray-600 dark:text-gray-400">{new Date(s.submittedAt).toLocaleDateString()}</td>
+                    <td className="py-3 text-gray-600 dark:text-gray-400">{new Date(s.submitted_at).toLocaleDateString()}</td>
                     <td className="py-3">
-                      {s.githubLink ? <a href={s.githubLink} target="_blank" rel="noreferrer" className="text-primary-600 hover:underline">View</a> : '—'}
+                      {s.github_link ? <a href={s.github_link} target="_blank" rel="noreferrer" className="text-primary-600 hover:underline">View</a> : '—'}
                     </td>
                   </tr>
                 ))}
@@ -383,8 +383,8 @@ const StudentDashboard = ({ user }) => {
 
         // Upcoming deadlines (tasks with future deadlines, sorted)
         const upcoming = tasks
-          .filter((t) => t.deadline && new Date(t.deadline) > new Date() && t.status !== 'submitted')
-          .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+          .filter((t) => t.due_date && new Date(t.due_date) > new Date() && t.status !== 'submitted')
+          .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
           .slice(0, 3);
 
         setStats({
@@ -424,9 +424,9 @@ const StudentDashboard = ({ user }) => {
           <CalendarCheck size={18} />
           <span className="text-sm font-medium">
             {attendance
-              ? attendance.status === 'checked_in'
-                ? `Checked in at ${new Date(attendance.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                : `Checked out`
+              ? attendance.check_out_time
+                ? `Checked out`
+                : `Checked in at ${new Date(attendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
               : 'Not checked in today'}
           </span>
         </div>
@@ -449,7 +449,7 @@ const StudentDashboard = ({ user }) => {
           ) : (
             <div className="space-y-3">
               {upcomingDeadlines.map((task) => {
-                const daysLeft = Math.ceil((new Date(task.deadline) - new Date()) / (1000 * 60 * 60 * 24));
+                const daysLeft = Math.ceil((new Date(task.due_date) - new Date()) / (1000 * 60 * 60 * 24));
                 return (
                   <div
                     key={task.id}
@@ -463,7 +463,7 @@ const StudentDashboard = ({ user }) => {
                         {daysLeft <= 0 ? 'Due today!' : `${daysLeft}d left`}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{new Date(task.deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{new Date(task.due_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
                   </div>
                 );
               })}
@@ -568,9 +568,9 @@ const TeamLeaderDashboard = ({ user }) => {
           <CalendarCheck size={18} />
           <span className="text-sm font-medium">
             {attendance
-              ? attendance.status === 'checked_in'
-                ? `Checked in at ${new Date(attendance.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                : `Checked out`
+              ? attendance.check_out_time
+                ? `Checked out`
+                : `Checked in at ${new Date(attendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
               : 'Not checked in today'}
           </span>
         </div>
@@ -613,10 +613,10 @@ const TeamLeaderDashboard = ({ user }) => {
               {teamMembers.map((member) => (
                 <div key={member.id} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold text-sm">
-                    {member.name?.charAt(0)?.toUpperCase() || '?'}
+                    {(member.full_name || member.name)?.charAt(0)?.toUpperCase() || '?'}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-800 dark:text-white">{member.name}</p>
+                    <p className="font-medium text-gray-800 dark:text-white">{member.full_name || member.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{member.role === 'team_leader' ? 'Team Leader' : 'Student'}</p>
                   </div>
                 </div>

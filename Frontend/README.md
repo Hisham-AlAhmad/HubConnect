@@ -1,295 +1,211 @@
-# HubConnect - Centralized Team Management Platform
+# HubConnect — Frontend
 
-A modern, production-ready web application for managing tasks, team communication, GitHub project tracking, and performance analytics.
+React SPA with Vite, Tailwind CSS, real-time Socket.io chat, and role-based dashboards.
 
-## 🚀 Features
+---
 
-- **Light/Dark Theme** with localStorage persistence and system preference detection
-- **Role-Based Authentication** (Admin, Instructor, Student, Team Leader)
-- **Workspace Management** - Create and manage project workspaces with team isolation
-- **Team Leader Role** - Scoped per workspace with task creation capabilities
-- **Internship/Semester Isolation** - Filter users and tasks by active internship
-- **Tabbed Chat System** - General, Workspace, and Team-specific channels
-- **Task Management** with deadlines and assignments (Jira-like for Team Leaders)
-- **Submission System** with GitHub integration
-- **Real-Time Team Chat** using Socket.io with avatars and role indicators
-- **User Profiles** with merged settings and preferences (theme, notifications)
-- **Reusable Avatar Component** with initials fallback and role-colored rings
-- **Performance Analytics** with interactive charts
-- **Team Management** and member viewing
-- **Notification System** with real-time updates
-- **Fully Responsive** modern UI with Tailwind CSS dark mode support
+## Tech Stack
 
-## 📋 Prerequisites
+| Layer        | Technology                              |
+| ------------ | --------------------------------------- |
+| Framework    | React 18                                |
+| Build Tool   | Vite 5                                  |
+| Styling      | Tailwind CSS 3 (dark mode support)      |
+| Routing      | React Router DOM 6                      |
+| HTTP Client  | Axios                                   |
+| Real-time    | Socket.io Client 4                      |
+| Charts       | Recharts                                |
+| Icons        | Lucide React                            |
+| Auth         | JWT (jwt-decode)                        |
 
-- Node.js 16+ and npm/yarn
-- Modern web browser
+---
 
-## 🛠️ Installation
-
-1. **Install Dependencies**
-
-   ```bash
-   npm install
-   ```
-
-2. **Start Development Server**
-
-   ```bash
-   npm run dev
-   ```
-
-3. **Open Browser**
-   - Navigate to `http://localhost:3000`
-   - Login with one of the demo accounts below
-
-## 👥 Demo Accounts
-
-| Role        | Email              | Password |
-| ----------- | ------------------ | -------- |
-| Admin       | admin@hub.com      | admin123 |
-| Instructor  | instructor@hub.com | inst123  |
-| Student     | student@hub.com    | stud123  |
-| Team Leader | leader@hub.com     | lead123  |
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-src/
-├── components/         # Reusable UI components
-│   ├── Sidebar.jsx
-│   ├── Navbar.jsx
-│   ├── Avatar.jsx              # NEW: Reusable avatar with initials fallback
-│   ├── ThemeToggle.jsx          # NEW: Light/Dark theme switcher
-│   ├── RoleGuard.jsx
-│   ├── TaskCard.jsx
-│   ├── SubmissionModal.jsx
-│   ├── ChatBox.jsx
-│   └── NotificationBell.jsx
-├── context/           # Global state management
-│   ├── AuthContext.jsx
-│   ├── NotificationContext.jsx
-│   ├── ThemeContext.jsx         # NEW: Light/Dark theme provider
-│   ├── InternshipContext.jsx    # NEW: Semester/internship isolation
-│   └── WorkspaceContext.jsx     # NEW: Workspace CRUD & team management
-├── hooks/             # Custom React hooks
-│   ├── useAuth.js
-│   └── useSocket.js
-├── layouts/           # Page layouts
-│   └── DashboardLayout.jsx
-├── pages/             # Application pages
-│   ├── Login.jsx
-│   ├── Dashboard.jsx
-│   ├── Tasks.jsx
-│   ├── CreateTask.jsx
-│   ├── TaskDetails.jsx
-│   ├── Teams.jsx
-│   ├── Chat.jsx                 # ENHANCED: Tabbed interface (General/Workspace/Team)
-│   ├── Profile.jsx              # ENHANCED: Merged settings with preferences tab
-│   ├── Workspaces.jsx           # NEW: List & create workspaces
-│   ├── WorkspaceDetails.jsx     # NEW: Teams, members, task creation
-│   ├── CheckInOut.jsx
-│   ├── DailyReports.jsx
-│   ├── StudentReport.jsx
-│   ├── Analytics.jsx
-│   └── NotFound.jsx
-├── routes/            # Routing configuration
-│   └── AppRoutes.jsx
-├── services/          # API and Socket services
-│   ├── api.js
-│   └── socket.js
-├── utils/             # Helper functions
-│   ├── constants.js
-│   └── helpers.js
-├── App.jsx
-└── main.jsx
+Frontend/
+├── index.html              # HTML entry
+├── package.json
+├── vite.config.js          # Vite config + API proxy
+├── tailwind.config.js      # Tailwind theme + dark mode
+├── postcss.config.js
+└── src/
+    ├── main.jsx            # React DOM entry
+    ├── App.jsx             # Root — context providers wrapper
+    ├── index.css           # Tailwind directives + global styles
+    ├── components/
+    │   ├── Avatar.jsx          # User avatar with initials fallback
+    │   ├── ChatBox.jsx         # Real-time chat UI (Socket.io)
+    │   ├── ErrorBoundary.jsx   # React error boundary
+    │   ├── Navbar.jsx          # Top navigation bar
+    │   ├── NotificationBell.jsx# Notification dropdown
+    │   ├── RoleGuard.jsx       # Route-level role protection
+    │   ├── Sidebar.jsx         # Dashboard sidebar navigation
+    │   ├── SubmissionModal.jsx # Task submission dialog
+    │   ├── TaskCard.jsx        # Task card component
+    │   └── ThemeToggle.jsx     # Light/dark mode toggle
+    ├── context/
+    │   ├── AuthContext.jsx      # Authentication state + JWT
+    │   ├── CohortContext.jsx    # Cohort selection & CRUD
+    │   ├── CourseContext.jsx    # Active course state
+    │   ├── NotificationContext.jsx # Notifications state
+    │   └── ThemeContext.jsx     # Dark/light theme state
+    ├── hooks/
+    │   ├── useAuth.js          # Auth context consumer hook
+    │   └── useSocket.js        # Socket.io connection hook
+    ├── layouts/
+    │   └── DashboardLayout.jsx # Sidebar + Navbar layout
+    ├── pages/
+    │   ├── Analytics.jsx       # Charts & analytics (Admin/Instructor)
+    │   ├── Chat.jsx            # Tabbed chat (General/Course/Team)
+    │   ├── CheckInOut.jsx      # Daily attendance (Student/TL)
+    │   ├── Cohorts.jsx         # Cohort management (Admin/Instructor)
+    │   ├── CourseDetails.jsx   # Single course view
+    │   ├── Courses.jsx         # Course listing
+    │   ├── CreateTask.jsx      # Task creation form
+    │   ├── DailyReports.jsx    # Daily attendance reports
+    │   ├── Dashboard.jsx       # Main dashboard
+    │   ├── Instructors.jsx     # Instructor management (Admin)
+    │   ├── Login.jsx           # Login page
+    │   ├── NotFound.jsx        # 404 page
+    │   ├── Profile.jsx         # User profile page
+    │   ├── StudentReport.jsx   # Individual student reports
+    │   ├── Students.jsx        # Student management (Admin/Instructor)
+    │   ├── TaskDetails.jsx     # Single task view
+    │   ├── Tasks.jsx           # Task listing
+    │   └── Teams.jsx           # Team management
+    ├── routes/
+    │   └── AppRoutes.jsx       # All routes + role guards
+    ├── services/
+    │   ├── api.js              # Axios instance + all API modules
+    │   └── socket.js           # Socket.io client singleton
+    └── utils/
+        ├── constants.js        # App-wide constants
+        └── helpers.js          # Utility functions
 ```
 
-## 🎨 Tech Stack
+---
 
-- **React 18** - UI library with functional components
-- **Vite** - Build tool and dev server (lightning-fast HMR)
-- **React Router v6** - Client-side routing
-- **Tailwind CSS** - Utility-first CSS framework with dark mode support
-- **Context API** - Global state management (Theme, Auth, Notifications, Workspace, Internship)
-- **Axios** - HTTP client
-- **Socket.io-client** - Real-time communication with MockSocket
-- **Recharts** - Data visualization for analytics
-- **Lucide React** - Modern icon library
-- **JWT Decode** - Token decoding
+## Getting Started
 
-## ✨ Key Enhancements
+### Prerequisites
 
-- **Dark Mode** - Complete dark theme applied to all 12+ pages and 7 components with Tailwind CSS `dark:` variants
-- **Theme Persistence** - User theme preference saved to localStorage with system preference fallback
-- **Avatar Component** - Reusable across entire app with image/initials fallback and role-colored rings
-- **Workspace Isolation** - Separate project workspaces with team and task management
-- **Team Leader Scoping** - Team leader role can be assigned per workspace for decentralized task creation
-- **Internship Filtering** - Automatic visibility filtering by active semester/internship
-- **Chat Enhancement** - Tabbed channels (General, Workspace, Team) with avatar display and role indicators in messages
+- **Node.js** >= 18
+- Backend API running on `http://localhost:5000` (see Backend README)
 
-## 🔐 Authentication Flow
+### 1. Install dependencies
 
-1. User logs in with email and password
-2. JWT token is generated and stored in localStorage
-3. Token is decoded to extract user info (role, id, name, team)
-4. Protected routes check authentication and role
-5. Sidebar and navigation adapt based on role
+```bash
+cd Frontend
+npm install
+```
 
-## 👤 Role-Based Features
+### 2. Start development server
 
-### Admin & Instructor
+```bash
+npm run dev
+```
 
-- View all tasks and submissions
-- Create and assign tasks
-- View analytics and team performance
-- Access all teams
+Opens at **http://localhost:5173**. API requests to `/api/*` are proxied to the backend automatically via Vite.
 
-### Team Leader
-
-- View team tasks
-- Submit tasks on behalf of team
-- Access team chat
-- View team members
-
-### Student
-
-- View assigned tasks
-- Access team chat
-- View submission status
-- View team members
-
-## 💬 Real-Time Chat
-
-- Team-based chat rooms
-- Online user indicators
-- Typing indicators
-- Auto-scroll to latest messages
-- Mock Socket.io implementation (works without backend)
-
-## 📊 Analytics Dashboard
-
-Available for Instructors and Admins:
-
-- Submission statistics
-- Timeline charts (Bar chart)
-- On-time vs Late submissions (Pie chart)
-- Team performance rankings
-- Detailed team comparison table
-
-## 🎯 API Mock System
-
-The application uses a comprehensive mock API system that simulates:
-
-- User authentication
-- Task CRUD operations
-- Submission tracking
-- Team management
-- Notifications
-- Analytics data
-
-**Note**: All data is stored in memory and resets on page refresh.
-
-## 🚀 Building for Production
+### 3. Build for production
 
 ```bash
 npm run build
 ```
 
-The production-ready files will be in the `dist/` directory.
-
-## 📱 Responsive Design
-
-- Mobile-first approach
-- Breakpoints: sm (640px), md (768px), lg (1024px), xl (1280px)
-- Collapsible sidebar on mobile
-- Touch-friendly interface
-- Optimized for all screen sizes
-
-## 🎨 UI/UX Features
-
-- Modern SaaS-style design
-- Soft shadows and rounded corners
-- Smooth transitions and animations
-- Loading states and skeletons
-- Error handling and validation
-- Toast notifications (via context)
-- Modal dialogs
-- Dropdown menus
-
-## ⚡ Performance Optimizations
-
-- React.memo for expensive components
-- Lazy loading for routes
-- Optimized re-renders
-- Efficient state management
-- Code splitting
-- Asset optimization
-
-## 🔧 Environment Variables
-
-No environment variables required for development. The app uses mock data.
-
-For production with a real backend:
-
-- Create `.env` file
-- Add `VITE_API_URL=your_backend_url`
-- Update `api.js` to use environment variable
-
-## 📝 Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build locally
-
-## 🐛 Troubleshooting
-
-### Port already in use
+Output goes to `dist/`. Preview with:
 
 ```bash
-# Change port in vite.config.js
-server: {
-  port: 3000
-}
+npm run preview
 ```
-
-### Module not found
-
-```bash
-# Clear node_modules and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
-
-## 🔮 Future Enhancements
-
-- Email notifications
-- File upload to cloud storage
-- Advanced search and filters
-- Calendar view for deadlines
-- GitHub API integration
-- Real-time collaboration features
-- Mobile app (React Native)
-- Dark mode
-
-## 📄 License
-
-MIT License - feel free to use this project for learning or production.
-
-## 👨‍💻 Development
-
-This is a frontend-only application with mock backend. To integrate with a real backend:
-
-1. Update API endpoints in `src/services/api.js`
-2. Replace MockSocket with real Socket.io connection
-3. Handle file uploads with multipart/form-data
-4. Implement proper error handling
-5. Add environment configuration
-
-## 🤝 Contributing
-
-This is a demo project, but feel free to fork and customize for your needs!
 
 ---
 
-**Built with ❤️ using React + Vite + Tailwind CSS**
+## Pages & Routing
+
+| Path                     | Page             | Access               |
+| ------------------------ | ---------------- | -------------------- |
+| `/login`                 | Login            | Public               |
+| `/dashboard`             | Dashboard        | All authenticated    |
+| `/tasks`                 | Tasks            | All authenticated    |
+| `/tasks/create`          | Create Task      | Admin, Instructor, TL|
+| `/tasks/:id`             | Task Details     | All authenticated    |
+| `/teams`                 | Teams            | All authenticated    |
+| `/courses`               | Courses          | All authenticated    |
+| `/courses/:id`           | Course Details   | All authenticated    |
+| `/cohorts`               | Cohorts          | Admin, Instructor    |
+| `/students`              | Students         | Admin, Instructor    |
+| `/instructors`           | Instructors      | Admin                |
+| `/chat`                  | Chat             | All authenticated    |
+| `/attendance`            | Check In/Out     | Student, Team Leader |
+| `/reports/daily`         | Daily Reports    | Admin, Instructor    |
+| `/reports/student`       | Student Reports  | Admin, Instructor    |
+| `/analytics`             | Analytics        | Admin, Instructor    |
+| `/profile`               | Profile          | All authenticated    |
+
+---
+
+## Roles
+
+The app supports four roles with cascading access:
+
+| Role            | Key Permissions                                         |
+| --------------- | ------------------------------------------------------- |
+| **Admin**       | Full access — manage orgs, cohorts, instructors, users  |
+| **Instructor**  | Manage courses, tasks, teams, view reports & analytics  |
+| **Team Leader** | Create tasks, manage team submissions, check attendance |
+| **Student**     | View tasks, submit work, chat, check attendance         |
+
+---
+
+## Features
+
+- **Dashboard** — role-specific stats and recent activity
+- **Task Management** — create, assign, track, submit, and review tasks
+- **Teams** — create teams within courses, assign members and leaders
+- **Real-time Chat** — General, Course, and Team chat rooms via Socket.io
+- **Attendance** — daily check-in/check-out tracking
+- **Notifications** — in-app notification bell with real-time updates
+- **Analytics** — charts and metrics for admins/instructors (Recharts)
+- **Dark Mode** — system-aware + manual toggle (Tailwind `class` strategy)
+- **Role Guards** — routes and UI elements protected by role
+- **Responsive** — mobile-friendly sidebar and layouts
+
+---
+
+## Authentication Flow
+
+1. User logs in with email and password
+2. Backend returns a JWT stored in localStorage
+3. Token is decoded to extract user info (role, id, name, team)
+4. Protected routes check authentication and role via `RoleGuard`
+5. Sidebar and navigation adapt based on the user's role
+
+---
+
+## Environment
+
+No `.env` file is needed for the frontend in development. The Vite proxy handles API routing:
+
+```js
+// vite.config.js — proxy /api to backend
+proxy: {
+  '/api': {
+    target: 'http://localhost:5000',
+    changeOrigin: true,
+  },
+}
+```
+
+For production builds, set `VITE_API_URL` if deploying frontend and backend separately.
+
+---
+
+## Scripts
+
+| Command           | Description                        |
+| ----------------- | ---------------------------------- |
+| `npm run dev`     | Start Vite dev server (port 5173)  |
+| `npm run build`   | Production build to `dist/`        |
+| `npm run preview` | Preview production build locally   |

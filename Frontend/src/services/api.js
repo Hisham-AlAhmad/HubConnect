@@ -1,139 +1,240 @@
 /* ============================================================
-   HubConnect  API layer (stubbed  no backend)
+   HubConnect  API layer
+   Base URL: VITE_API_URL env var or http://localhost:5000/api
+   All methods return the backend JSON body: { success, data, error? }
    ============================================================ */
+import axios from 'axios';
 
-//  AUTH API 
+// ── Axios instance ────────────────────────────────────────────────────────────
+const instance = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: false,
+});
 
+// Attach JWT from localStorage on every request
+instance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('hc_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  },
+  (err) => Promise.reject(err)
+);
+
+// Unwrap axios envelope → return backend body ({ success, data, error })
+// On 401 clear storage and redirect to login
+instance.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('hc_token');
+      localStorage.removeItem('hc_user');
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    // Normalise error to our { success, error } shape
+    return Promise.reject(
+      error.response?.data ?? { success: false, error: error.message }
+    );
+  }
+);
+
+// ── AUTH API ──────────────────────────────────────────────────────────────────
 export const authAPI = {
-  login: async () => ({ data: null }),
-  logout: async () => ({ data: null }),
-  updateProfile: async () => ({ data: null }),
-  changePassword: async () => ({ data: null }),
-  forgotPassword: async () => ({ data: null }),
-  verifyResetCode: async () => ({ data: null }),
-  resetPassword: async () => ({ data: null }),
+  register: (data) =>
+    instance.post('/auth/register', data),
+
+  login: (email, password) =>
+    instance.post('/auth/login', { email, password }),
+
+  logout: () =>
+    instance.post('/auth/logout'),
+
+  me: () =>
+    instance.get('/auth/me'),
+
+  updateProfile: (data) =>
+    instance.put('/auth/profile', data),
+
+  changePassword: (currentPassword, newPassword) =>
+    instance.put('/auth/password', { currentPassword, newPassword }),
+
+  forgotPassword: (email) =>
+    instance.post('/auth/forgot-password', { email }),
+
+  verifyResetCode: (email, token) =>
+    instance.post('/auth/verify-reset', { email, token }),
+
+  resetPassword: (email, token, password) =>
+    instance.post('/auth/reset-password', { email, token, password }),
 };
 
-//  TASK API 
-
+// ── TASK API ──────────────────────────────────────────────────────────────────
 export const taskAPI = {
-  getAllTasks: async () => ({ data: [] }),
-  getTaskById: async () => ({ data: null }),
-  getMyTasks: async () => ({ data: [] }),
-  createTask: async () => ({ data: null }),
-  updateTask: async () => ({ data: null }),
-  deleteTask: async () => ({ data: null }),
+  getAllTasks: () => instance.get('/tasks'),
+  getTaskById: (id) => instance.get(`/tasks/${id}`),
+  getMyTasks: () => instance.get('/tasks/my'),
+  createTask: (data) => instance.post('/tasks', data),
+  updateTask: (id, data) => instance.put(`/tasks/${id}`, data),
+  deleteTask: (id) => instance.delete(`/tasks/${id}`),
 };
 
-//  SUBMISSION API 
-
+// ── SUBMISSION API ────────────────────────────────────────────────────────────
 export const submissionAPI = {
-  getAllSubmissions: async () => ({ data: [] }),
-  getSubmissionsByTask: async () => ({ data: [] }),
-  submitTask: async () => ({ data: null }),
-  checkSubmission: async () => ({ data: null }),
+  getAllSubmissions: () => instance.get('/submissions'),
+  getSubmissionsByTask: (taskId) => instance.get(`/submissions/task/${taskId}`),
+  submitTask: (taskId, data) => instance.post('/submissions', { taskId, ...data }),
+  checkSubmission: (taskId) => instance.get(`/submissions/check/${taskId}`),
+  reviewSubmission: (id, data) => instance.put(`/submissions/${id}/review`, data),
 };
 
-//  TEAM API 
-
+// ── TEAM API ──────────────────────────────────────────────────────────────────
 export const teamAPI = {
-  getAllTeams: async () => ({ data: [] }),
-  getAll: async () => ({ data: [] }),
-  getTeamById: async () => ({ data: null }),
-  getTeamMembers: async () => ({ data: [] }),
-  createTeam: async () => ({ data: null }),
-  updateTeam: async () => ({ data: null }),
-  deleteTeam: async () => ({ data: null }),
-  addMember: async () => ({ data: null }),
-  removeMember: async () => ({ data: null }),
-  getAllStudents: async () => ({ data: [] }),
+  getAllTeams: () => instance.get('/teams'),
+  getAll: () => instance.get('/teams'),
+  getTeamById: (id) => instance.get(`/teams/${id}`),
+  getTeamMembers: (id) => instance.get(`/teams/${id}/members`),
+  createTeam: (data) => instance.post('/teams', data),
+  updateTeam: (id, data) => instance.put(`/teams/${id}`, data),
+  deleteTeam: (id) => instance.delete(`/teams/${id}`),
+  addMember: (id, userId) => instance.post(`/teams/${id}/members`, { userId }),
+  removeMember: (id, userId) => instance.delete(`/teams/${id}/members/${userId}`),
+  getAllStudents: () => instance.get('/profiles/students'),
 };
 
-//  CHECK-IN API 
-
+// ── CHECK-IN API ──────────────────────────────────────────────────────────────
 export const checkInAPI = {
-  checkIn: async () => ({ data: null }),
-  checkOut: async () => ({ data: null }),
-  getTodayStatus: async () => ({ data: null }),
-  getByDate: async () => ({ data: [] }),
-  getUserHistory: async () => ({ data: [] }),
-  getAll: async () => ({ data: [] }),
+  checkIn: (date) => instance.post('/attendance/check-in', date ? { date } : {}),
+  checkOut: () => instance.post('/attendance/check-out'),
+  getTodayStatus: () => instance.get('/attendance/today'),
+  getByDate: (date) => instance.get('/attendance', { params: { date } }),
+  getUserHistory: () => instance.get('/attendance/history'),
+  getAll: (date) => instance.get('/attendance/all', date ? { params: { date } } : {}),
 };
 
-//  REPORTS API 
-
+// ── REPORTS API ───────────────────────────────────────────────────────────────
 export const reportsAPI = {
-  getDailyReport: async () => ({ data: { date: '', records: [] } }),
-  getDateRangeReport: async () => ({ data: { startDate: '', endDate: '', records: [] } }),
-  getStudentReport: async () => ({ data: null }),
-  getAllStudentsSummary: async () => ({ data: [] }),
+  getDailyReport: (date) => instance.get('/reports/daily', { params: { date } }),
+  getDateRangeReport: (start, end) => instance.get('/reports/range', { params: { start, end } }),
+  getStudentReport: (id) => instance.get(`/reports/student/${id}`),
+  getAllStudentsSummary: () => instance.get('/reports/summary'),
 };
 
-//  ANALYTICS API 
-
+// ── ANALYTICS API ─────────────────────────────────────────────────────────────
 export const analyticsAPI = {
-  getSubmissionStats: async () => ({
-    data: { totalTasks: 0, submittedTasks: 0, pendingTasks: 0, submissionRate: 0 },
-  }),
-  getSubmissionTimeline: async () => ({ data: [] }),
-  getTeamRankings: async () => ({ data: [] }),
-  getOnTimeLateStats: async () => ({
-    data: [
-      { name: 'On Time', value: 0, percentage: 0 },
-      { name: 'Late', value: 0, percentage: 0 },
-    ],
-  }),
+  getSubmissionStats: () => instance.get('/analytics/submission-stats'),
+  getSubmissionTimeline: () => instance.get('/analytics/timeline'),
+  getTeamRankings: () => instance.get('/analytics/rankings'),
+  getOnTimeLateStats: () => instance.get('/analytics/on-time-late'),
 };
 
-//  COURSE API 
-
+// ── COURSE API ────────────────────────────────────────────────────────────────
 export const courseAPI = {
-  getAll: async () => ({ data: [] }),
-  getById: async () => ({ data: null }),
-  create: async () => ({ data: null }),
-  update: async () => ({ data: null }),
-  finish: async () => ({ data: null }),
-  addTeam: async () => ({ data: null }),
-  removeTeam: async () => ({ data: null }),
-  assignLeader: async () => ({ data: null }),
-  addMember: async () => ({ data: null }),
-  removeMember: async () => ({ data: null }),
-  getTasks: async () => ({ data: [] }),
-  createTask: async () => ({ data: null }),
-  updateTask: async () => ({ data: null }),
+  getAll: () => instance.get('/courses'),
+  getById: (id) => instance.get(`/courses/${id}`),
+  create: (data) => instance.post('/courses', data),
+  update: (id, data) => instance.put(`/courses/${id}`, data),
+  finish: (id) => instance.patch(`/courses/${id}/finish`),
+  addTeam: (id, data) => instance.post(`/courses/${id}/teams`, data),
+  removeTeam: (id, teamId) => instance.delete(`/courses/${id}/teams/${teamId}`),
+  assignLeader: (id, teamId, userId) => instance.post(`/courses/${id}/teams/${teamId}/leader`, { userId }),
+  addMember: (id, teamId, userId) => instance.post(`/courses/${id}/teams/${teamId}/members`, { userId }),
+  removeMember: (id, teamId, userId) => instance.delete(`/courses/${id}/teams/${teamId}/members/${userId}`),
+  getTasks: (id) => instance.get(`/courses/${id}/tasks`),
+  createTask: (id, data) => instance.post(`/courses/${id}/tasks`, data),
+  updateTask: (id, taskId, data) => instance.put(`/courses/${id}/tasks/${taskId}`, data),
 };
 
-//  COHORT API 
-
+// ── COHORT API ────────────────────────────────────────────────────────────────
 export const cohortAPI = {
-  getAll: async () => ({ data: [] }),
-  getById: async () => ({ data: null }),
-  create: async () => ({ data: null }),
-  update: async () => ({ data: null }),
-  delete: async () => ({ data: null }),
-  assignInstructor: async () => ({ data: null }),
-  removeInstructor: async () => ({ data: null }),
+  getAll: () => instance.get('/cohorts'),
+  getById: (id) => instance.get(`/cohorts/${id}`),
+  create: (data) => instance.post('/cohorts', data),
+  update: (id, data) => instance.put(`/cohorts/${id}`, data),
+  delete: (id) => instance.delete(`/cohorts/${id}`),
+  assignInstructor: (id, instructorId) => instance.post(`/cohorts/${id}/instructor`, { instructorId }),
+  removeInstructor: (id, userId) => instance.delete(`/cohorts/${id}/instructor/${userId}`),
 };
 
-//  NOTIFICATION API 
-
+// ── NOTIFICATION API ──────────────────────────────────────────────────────────
 export const notificationAPI = {
-  getNotifications: async () => ({ data: [] }),
-  markAsRead: async () => ({ data: null }),
-  markAllAsRead: async () => ({ data: null }),
+  getNotifications: () => instance.get('/notifications'),
+  markAsRead: (id) => instance.put(`/notifications/${id}/read`),
+  markAllAsRead: () => instance.put('/notifications/read-all'),
 };
 
-// Default export for backward compatibility
+// ── PROFILE API ───────────────────────────────────────────────────────────────
+export const profileAPI = {
+  getAll: () => instance.get('/profiles'),
+  getStudents: () => instance.get('/profiles/students'),
+  getInstructors: () => instance.get('/profiles/instructors'),
+  getById: (id) => instance.get(`/profiles/${id}`),
+  update: (id, data) => instance.put(`/profiles/${id}`, data),
+};
+
+// ── ORGANIZATION API ──────────────────────────────────────────────────────────
+export const organizationAPI = {
+  getAll: () => instance.get('/organizations'),
+  getById: (id) => instance.get(`/organizations/${id}`),
+  create: (data) => instance.post('/organizations', data),
+  update: (id, data) => instance.put(`/organizations/${id}`, data),
+  getUsers: (id) => instance.get(`/organizations/${id}/users`),
+};
+
+// ── FILES API ─────────────────────────────────────────────────────────────────
+export const filesAPI = {
+  getAll: (params) => instance.get('/files', { params }),
+  getById: (id) => instance.get(`/files/${id}`),
+  upload: (formData) => instance.post('/files/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  delete: (id) => instance.delete(`/files/${id}`),
+};
+
+// ── ACTIVITY LOGS API ─────────────────────────────────────────────────────────
+export const activityLogsAPI = {
+  getAll: (params) => instance.get('/activity-logs', { params }),
+  getByResource: (type, id) => instance.get(`/activity-logs/resource/${type}/${id}`),
+  getByUser: (userId) => instance.get(`/activity-logs/user/${userId}`),
+};
+
+// ── CHAT API ─────────────────────────────────────────────────────────────────
+export const chatAPI = {
+  getRooms: () => instance.get('/chat/rooms'),
+  createRoom: (data) => instance.post('/chat/rooms', data),
+  getMessages: (roomId, params) =>
+    instance.get(`/chat/rooms/${roomId}/messages`, { params }),
+  sendMessage: (roomId, content) =>
+    instance.post(`/chat/rooms/${roomId}/messages`, { content }),
+};
+
+// ── ROLES API ─────────────────────────────────────────────────────────────────
+export const rolesAPI = {
+  getAll: () => instance.get('/roles'),
+  create: (data) => instance.post('/roles', data),
+  update: (id, data) => instance.put(`/roles/${id}`, data),
+  delete: (id) => instance.delete(`/roles/${id}`),
+  getUserRoles: (userId) => instance.get(`/roles/user/${userId}`),
+  assign: (data) => instance.post('/roles/assign', data),
+};
+
+// ── Default export for backward compatibility ─────────────────────────────────
 const api = {
   authAPI,
   taskAPI,
   submissionAPI,
   teamAPI,
   checkInAPI,
+  chatAPI,
   reportsAPI,
   analyticsAPI,
   notificationAPI,
   courseAPI,
   cohortAPI,
+  profileAPI,
+  organizationAPI,
+  filesAPI,
+  activityLogsAPI,
+  rolesAPI,
 };
 export default api;

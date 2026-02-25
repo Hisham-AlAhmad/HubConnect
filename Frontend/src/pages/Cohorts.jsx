@@ -10,11 +10,11 @@ import {
 /**
  * Cohorts Page
  * Admin can view, create, edit, and delete cohorts.
- * Instructors see only their assigned cohorts.
+ * Instructors see all cohorts (server-side filtering can be added later).
  */
 const Cohorts = () => {
     const { user, hasRole } = useAuth();
-    const { cohorts, createCohort, updateCohort, deleteCohort } = useCohort();
+    const { cohorts, loading, createCohort, updateCohort, deleteCohort } = useCohort();
     const navigate = useNavigate();
 
     const [showCreate, setShowCreate] = useState(false);
@@ -25,55 +25,81 @@ const Cohorts = () => {
 
     const isAdmin = hasRole('admin');
 
-    // Instructors see only their assigned cohorts
-    const visibleCohorts = isAdmin
-        ? cohorts
-        : cohorts.filter((c) => c.assignedInstructorIds.includes(user.id));
+    // Show all cohorts (backend can add role-based filtering later)
+    const visibleCohorts = cohorts;
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!form.name.trim()) { setError('Name is required'); return; }
         if (!form.startDate) { setError('Start date is required'); return; }
         if (!form.endDate) { setError('End date is required'); return; }
 
-        const result = createCohort({
-            name: form.name.trim(),
-            startDate: form.startDate,
-            endDate: form.endDate,
-        });
-
-        if (result?.error) { setError(result.error); return; }
-        setShowCreate(false);
-        setForm({ name: '', startDate: '', endDate: '' });
-        setError('');
+        try {
+            await createCohort({
+                name: form.name.trim(),
+                startDate: form.startDate,
+                endDate: form.endDate,
+                organizationId: user.organizationId,
+            });
+            setShowCreate(false);
+            setForm({ name: '', startDate: '', endDate: '' });
+            setError('');
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Failed to create cohort');
+        }
     };
 
-    const handleEdit = () => {
+    const handleEdit = async () => {
         if (!form.name.trim()) { setError('Name is required'); return; }
-        updateCohort(showEdit, {
-            name: form.name.trim(),
-            startDate: form.startDate,
-            endDate: form.endDate,
-        });
-        setShowEdit(null);
-        setForm({ name: '', startDate: '', endDate: '' });
-        setError('');
+        try {
+            await updateCohort(showEdit, {
+                name: form.name.trim(),
+                startDate: form.startDate || undefined,
+                endDate: form.endDate || undefined,
+            });
+            setShowEdit(null);
+            setForm({ name: '', startDate: '', endDate: '' });
+            setError('');
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Failed to update cohort');
+        }
     };
 
-    const handleDelete = () => {
-        deleteCohort(showDelete);
-        setShowDelete(null);
+    const handleDelete = async () => {
+        try {
+            await deleteCohort(showDelete);
+            setShowDelete(null);
+        } catch (err) {
+            console.error('Delete cohort failed:', err);
+        }
     };
 
     const openEdit = (cohort) => {
-        setForm({ name: cohort.name, startDate: cohort.startDate, endDate: cohort.endDate });
+        setForm({
+            name: cohort.name,
+            startDate: cohort.start_date ? cohort.start_date.slice(0, 10) : '',
+            endDate: cohort.end_date ? cohort.end_date.slice(0, 10) : '',
+        });
         setShowEdit(cohort.id);
         setError('');
     };
 
-    const statusBadge = (status) => {
-        if (status === 'active') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+    const statusBadge = (isActive) => {
+        if (isActive) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
         return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
     };
+
+    const formatDate = (d) => {
+        if (!d) return '—';
+        try { return new Date(d).toLocaleDateString(); } catch { return d; }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -82,7 +108,7 @@ const Cohorts = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Cohorts</h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-1">
-                        {isAdmin ? 'Create and manage cohorts' : 'View your assigned cohorts'}
+                        {isAdmin ? 'Create and manage cohorts' : 'View cohorts'}
                     </p>
                 </div>
                 {isAdmin && (
@@ -102,7 +128,7 @@ const Cohorts = () => {
                     <GraduationCap size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                     <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-1">No Cohorts Yet</h2>
                     <p className="text-gray-500 dark:text-gray-400">
-                        {isAdmin ? 'Create your first cohort to get started.' : 'No cohorts have been assigned to you.'}
+                        {isAdmin ? 'Create your first cohort to get started.' : 'No cohorts available.'}
                     </p>
                 </div>
             ) : (
@@ -117,8 +143,8 @@ const Cohorts = () => {
                                     <GraduationCap size={24} className="text-primary-600 dark:text-primary-400" />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(cohort.status)}`}>
-                                        {cohort.status}
+                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusBadge(cohort.is_active)}`}>
+                                        {cohort.is_active ? 'active' : 'inactive'}
                                     </span>
                                     {isAdmin && (
                                         <div className="flex gap-1">
@@ -140,15 +166,15 @@ const Cohorts = () => {
                             <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
                                 <div className="flex items-center gap-2">
                                     <Calendar size={14} />
-                                    <span>{cohort.startDate} — {cohort.endDate}</span>
+                                    <span>{formatDate(cohort.start_date)} — {formatDate(cohort.end_date)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Users size={14} />
-                                    <span>{cohort.enrolledStudentIds.length} student{cohort.enrolledStudentIds.length !== 1 ? 's' : ''}</span>
+                                    <span>{cohort.student_count ?? 0} student{(cohort.student_count ?? 0) !== 1 ? 's' : ''}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <GraduationCap size={14} />
-                                    <span>{cohort.assignedInstructorIds.length} instructor{cohort.assignedInstructorIds.length !== 1 ? 's' : ''}</span>
+                                    <span>{cohort.instructor_count ?? 0} instructor{(cohort.instructor_count ?? 0) !== 1 ? 's' : ''}</span>
                                 </div>
                             </div>
                         </div>

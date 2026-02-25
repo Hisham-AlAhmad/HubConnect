@@ -1,136 +1,104 @@
 import { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { cohortAPI } from '../services/api';
 
 export const CohortContext = createContext(null);
-
-/**
- * Mock cohort data.
- * In production this comes from the backend; the context ensures isolation.
- */
-const MOCK_COHORTS = [
-    {
-        id: 'coh-1',
-        name: 'Spring 2026 Cohort',
-        startDate: '2026-01-15',
-        endDate: '2026-06-15',
-        status: 'active',
-        enrolledStudentIds: ['3', '4'], // student & team-leader demo users
-        assignedInstructorIds: ['2'],   // instructor demo user
-    },
-    {
-        id: 'coh-2',
-        name: 'Fall 2025 Cohort',
-        startDate: '2025-08-01',
-        endDate: '2025-12-31',
-        status: 'finished',
-        enrolledStudentIds: ['10', '11'],
-        assignedInstructorIds: [],
-    },
-];
 
 export const CohortProvider = ({ children }) => {
     const { user } = useAuth();
     const [currentCohort, setCurrentCohort] = useState(null);
-    const [cohorts, setCohorts] = useState(MOCK_COHORTS);
+    const [cohorts, setCohorts] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-    // Automatically resolve the active cohort for the current user
-    useEffect(() => {
-        if (!user) {
-            setCurrentCohort(null);
-            return;
+    /* ── Fetch cohorts from backend ────────────────────────── */
+    const fetchCohorts = useCallback(async () => {
+        if (!user) return;
+        try {
+            setLoading(true);
+            const res = await cohortAPI.getAll();
+            const data = Array.isArray(res?.data) ? res.data : [];
+            setCohorts(data);
+            // Auto-select first active cohort
+            const active = data.find((c) => c.is_active);
+            setCurrentCohort(active || data[0] || null);
+        } catch (err) {
+            console.error('Error fetching cohorts:', err);
+            setCohorts([]);
+        } finally {
+            setLoading(false);
         }
-
-        if (user.role === 'admin') {
-            // Admin can see all – default to the first active
-            const active = cohorts.find((c) => c.status === 'active');
-            setCurrentCohort(active || cohorts[0] || null);
-        } else if (user.role === 'instructor') {
-            // Instructor – find a cohort they are assigned to
-            const assigned = cohorts.find(
-                (c) => c.status === 'active' && c.assignedInstructorIds.includes(user.id)
-            );
-            setCurrentCohort(assigned || null);
-        } else {
-            // Students / team leaders – find the cohort they belong to
-            const enrolled = cohorts.find(
-                (c) => c.status === 'active' && c.enrolledStudentIds.includes(user.id)
-            );
-            setCurrentCohort(enrolled || null);
-        }
-    }, [user, cohorts]);
-
-    /* ── CRUD helpers ──────────────────────────────────────── */
-
-    const createCohort = useCallback((data) => {
-        if (!user || user.role !== 'admin') return null;
-        const newCohort = {
-            id: `coh-${Date.now()}`,
-            status: 'active',
-            enrolledStudentIds: [],
-            assignedInstructorIds: [],
-            ...data,
-        };
-        setCohorts((prev) => [...prev, newCohort]);
-        return { data: newCohort };
     }, [user]);
 
-    const updateCohort = useCallback((cohortId, data) => {
-        setCohorts((prev) =>
-            prev.map((c) => (c.id === cohortId ? { ...c, ...data } : c))
-        );
-    }, []);
+    useEffect(() => {
+        fetchCohorts();
+    }, [fetchCohorts]);
 
-    const deleteCohort = useCallback((cohortId) => {
-        setCohorts((prev) => prev.filter((c) => c.id !== cohortId));
-    }, []);
+    /* ── CRUD helpers (call backend then refresh) ─────────── */
 
-    const assignInstructorToCohort = useCallback((cohortId, instructorId) => {
-        setCohorts((prev) =>
-            prev.map((c) => {
-                if (c.id !== cohortId) return c;
-                if (c.assignedInstructorIds.includes(instructorId)) return c;
-                return { ...c, assignedInstructorIds: [...c.assignedInstructorIds, instructorId] };
-            })
-        );
-    }, []);
+    const createCohort = useCallback(async (data) => {
+        if (!user || user.role !== 'admin') return null;
+        try {
+            const res = await cohortAPI.create(data);
+            await fetchCohorts();
+            return res;
+        } catch (err) {
+            console.error('Error creating cohort:', err);
+            throw err;
+        }
+    }, [user, fetchCohorts]);
 
-    const removeInstructorFromCohort = useCallback((cohortId, instructorId) => {
-        setCohorts((prev) =>
-            prev.map((c) => {
-                if (c.id !== cohortId) return c;
-                return { ...c, assignedInstructorIds: c.assignedInstructorIds.filter((id) => id !== instructorId) };
-            })
-        );
-    }, []);
+    const updateCohort = useCallback(async (cohortId, data) => {
+        try {
+            const res = await cohortAPI.update(cohortId, data);
+            await fetchCohorts();
+            return res;
+        } catch (err) {
+            console.error('Error updating cohort:', err);
+            throw err;
+        }
+    }, [fetchCohorts]);
 
-    /**
-     * Check if a given studentId is visible to the current user.
-     * Students from a different cohort are hidden.
-     */
-    const isStudentVisible = (studentId) => {
-        if (!currentCohort) return true;
-        return currentCohort.enrolledStudentIds.includes(studentId);
-    };
+    const deleteCohort = useCallback(async (cohortId) => {
+        try {
+            await cohortAPI.delete(cohortId);
+            await fetchCohorts();
+        } catch (err) {
+            console.error('Error deleting cohort:', err);
+            throw err;
+        }
+    }, [fetchCohorts]);
 
-    /**
-     * Filter an array of users to only those enrolled in the current cohort.
-     */
-    const filterByCohort = (users) => {
-        if (!currentCohort) return users;
-        return users.filter((u) => currentCohort.enrolledStudentIds.includes(u.id));
-    };
+    const assignInstructorToCohort = useCallback(async (cohortId, instructorId) => {
+        try {
+            await cohortAPI.assignInstructor(cohortId, instructorId);
+            await fetchCohorts();
+        } catch (err) {
+            console.error('Error assigning instructor:', err);
+            throw err;
+        }
+    }, [fetchCohorts]);
+
+    const removeInstructorFromCohort = useCallback(async (cohortId, instructorId) => {
+        try {
+            await cohortAPI.removeInstructor(cohortId, instructorId);
+            await fetchCohorts();
+        } catch (err) {
+            console.error('Error removing instructor:', err);
+            throw err;
+        }
+    }, [fetchCohorts]);
 
     const value = {
         cohorts,
         currentCohort,
         setCurrentCohort,
+        loading,
         createCohort,
         updateCohort,
         deleteCohort,
         assignInstructorToCohort,
         removeInstructorFromCohort,
-        isStudentVisible,
-        filterByCohort,
+        fetchCohorts,
     };
 
     return (
