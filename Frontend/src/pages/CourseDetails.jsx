@@ -152,11 +152,13 @@ const CourseDetails = () => {
 
     const taskStatusBadge = (s) => {
         const map = {
-            todo: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+            pending: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
             in_progress: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-            done: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+            submitted: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+            accepted: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+            rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
         };
-        return map[s] || map.todo;
+        return map[s] || map.pending;
     };
 
     if (loading) {
@@ -369,9 +371,11 @@ const CourseDetails = () => {
                                                 onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
                                                 className="text-xs border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                                             >
-                                                <option value="todo">To Do</option>
+                                                <option value="pending">Pending</option>
                                                 <option value="in_progress">In Progress</option>
-                                                <option value="done">Done</option>
+                                                <option value="submitted">Submitted</option>
+                                                <option value="accepted">Accepted</option>
+                                                <option value="rejected">Rejected</option>
                                             </select>
                                         )}
                                     </div>
