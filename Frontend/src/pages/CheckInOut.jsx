@@ -27,8 +27,8 @@ export default function CheckInOut() {
     try {
       setLoading(true);
       const [statusRes, historyRes] = await Promise.all([
-        checkInAPI.getTodayStatus(user.id),
-        checkInAPI.getUserHistory(user.id)
+        checkInAPI.getTodayStatus(),
+        checkInAPI.getUserHistory()
       ]);
       setTodayStatus(statusRes.data);
       setHistory(historyRes.data);
@@ -52,7 +52,7 @@ export default function CheckInOut() {
     try {
       setActionLoading(true);
       setError('');
-      await checkInAPI.checkIn(user.id, notes);
+      await checkInAPI.checkIn(notes);
       setSuccess('Checked in successfully!');
       setNotes('');
       await fetchData();
@@ -68,7 +68,7 @@ export default function CheckInOut() {
     try {
       setActionLoading(true);
       setError('');
-      await checkInAPI.checkOut(user.id, notes);
+      await checkInAPI.checkOut(notes);
       setSuccess('Checked out successfully!');
       setNotes('');
       await fetchData();

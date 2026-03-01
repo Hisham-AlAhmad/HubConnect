@@ -42,9 +42,10 @@ router.post(
             const orgId = orgRow?.organization_id ?? req.user.organizationId;
             if (!orgId) return res.status(400).json({ success: false, error: 'User has no organization.' });
 
+            const notes = req.body.notes || null;
             const [record] = await sql`
-                INSERT INTO attendance (organization_id, user_id, date, check_in_time, status)
-                VALUES (${orgId}, ${req.user.id}, ${dateStr}, NOW(), 'present')
+                INSERT INTO attendance (organization_id, user_id, date, check_in_time, status, notes)
+                VALUES (${orgId}, ${req.user.id}, ${dateStr}, NOW(), 'present', ${notes})
                 RETURNING *
             `;
             res.status(201).json({ success: true, data: record });
@@ -56,9 +57,10 @@ router.post(
 router.post('/check-out', async (req, res, next) => {
     try {
         const dateStr = new Date().toISOString().slice(0, 10);
+        const notes = req.body.notes || null;
         const [record] = await sql`
             UPDATE attendance
-            SET check_out_time = NOW()
+            SET check_out_time = NOW()${notes ? sql`, notes = ${notes}` : sql``}
             WHERE user_id = ${req.user.id} AND date = ${dateStr} AND check_out_time IS NULL
             RETURNING *
         `;

@@ -106,8 +106,8 @@ export const teamAPI = {
 
 // ── CHECK-IN API ──────────────────────────────────────────────────────────────
 export const checkInAPI = {
-  checkIn: (date) => instance.post('/attendance/check-in', date ? { date } : {}),
-  checkOut: () => instance.post('/attendance/check-out'),
+  checkIn: (notes, date) => instance.post('/attendance/check-in', { ...(notes ? { notes } : {}), ...(date ? { date } : {}) }),
+  checkOut: (notes) => instance.post('/attendance/check-out', notes ? { notes } : {}),
   getTodayStatus: () => instance.get('/attendance/today'),
   getByDate: (date) => instance.get('/attendance', { params: { date } }),
   getUserHistory: () => instance.get('/attendance/history'),
