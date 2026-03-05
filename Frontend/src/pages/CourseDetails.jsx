@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { courseAPI } from '../services/api';
+import { courseAPI, taskAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 import {
     ArrowLeft, Briefcase, Users, Calendar, Clock, Plus, Crown, UserPlus,
@@ -117,7 +117,8 @@ const CourseDetails = () => {
     const handleCreateTask = async () => {
         if (!taskForm.title.trim()) { showMsg('Task title is required', true); return; }
         try {
-            await courseAPI.createTask(id, {
+            await taskAPI.createTask({
+                courseId: id,
                 title: taskForm.title.trim(),
                 description: taskForm.description.trim(),
                 priority: taskForm.priority,
@@ -133,7 +134,7 @@ const CourseDetails = () => {
 
     const handleUpdateTaskStatus = async (taskId, status) => {
         try {
-            await courseAPI.updateTask(id, taskId, { status });
+            await taskAPI.updateTask(taskId, { status });
             await fetchTasks();
         } catch (err) {
             showMsg(err?.error || 'Failed to update task', true);

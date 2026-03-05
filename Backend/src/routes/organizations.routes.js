@@ -12,6 +12,7 @@ import sql from '../db/index.js';
 import authenticate from '../middleware/authenticate.js';
 import { authorize } from '../middleware/rbac.js';
 import { validate } from '../middleware/validate.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
@@ -19,15 +20,15 @@ router.use(authenticate);
 router.get('/', async (_req, res, next) => {
     try {
         const orgs = await sql`SELECT * FROM organizations ORDER BY created_at DESC`;
-        res.json({ success: true, data: orgs });
+        return successResponse(res, 'Organizations retrieved successfully.', orgs);
     } catch (err) { next(err); }
 });
 
 router.get('/:id', async (req, res, next) => {
     try {
         const [org] = await sql`SELECT * FROM organizations WHERE id = ${req.params.id}`;
-        if (!org) return res.status(404).json({ success: false, error: 'Organization not found.' });
-        res.json({ success: true, data: org });
+        if (!org) return errorResponse(res, 'Organization not found.', 404);
+        return successResponse(res, 'Organization retrieved successfully.', org);
     } catch (err) { next(err); }
 });
 
@@ -47,9 +48,9 @@ router.post(
                 VALUES (${name}, ${slug}, ${description ?? null}, ${logoUrl ?? null})
                 RETURNING *
             `;
-            res.status(201).json({ success: true, data: org });
+            return successResponse(res, 'Organization created successfully.', org, 201);
         } catch (err) {
-            if (err.code === '23505') return res.status(409).json({ success: false, error: 'Organization slug already exists.' });
+            if (err.code === '23505') return errorResponse(res, 'Organization slug already exists.', 409);
             next(err);
         }
     }
@@ -71,8 +72,8 @@ router.put(
                     updated_at  = CURRENT_TIMESTAMP
                 WHERE id = ${req.params.id} RETURNING *
             `;
-            if (!org) return res.status(404).json({ success: false, error: 'Organization not found.' });
-            res.json({ success: true, data: org });
+            if (!org) return errorResponse(res, 'Organization not found.', 404);
+            return successResponse(res, 'Organization updated successfully.', org);
         } catch (err) { next(err); }
     }
 );
@@ -86,7 +87,7 @@ router.get('/:id/users', authorize('admin'), async (req, res, next) => {
             WHERE ou.organization_id = ${req.params.id}
             ORDER BY p.full_name
         `;
-        res.json({ success: true, data: users });
+        return successResponse(res, 'Organization users retrieved successfully.', users);
     } catch (err) { next(err); }
 });
 

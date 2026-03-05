@@ -8,6 +8,7 @@ import { Router } from 'express';
 import sql from '../db/index.js';
 import authenticate from '../middleware/authenticate.js';
 import { authorize } from '../middleware/rbac.js';
+import { successResponse } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
@@ -25,7 +26,7 @@ router.get('/', async (req, res, next) => {
             ORDER BY al.created_at DESC
             LIMIT ${limit} OFFSET ${offset}
         `;
-        res.json({ success: true, data: logs });
+        return successResponse(res, 'Activity logs retrieved successfully.', logs);
     } catch (err) { next(err); }
 });
 
@@ -40,7 +41,7 @@ router.get('/resource/:type/:id', async (req, res, next) => {
             ORDER BY al.created_at DESC
             LIMIT 100
         `;
-        res.json({ success: true, data: logs });
+        return successResponse(res, 'Activity logs retrieved successfully.', logs);
     } catch (err) { next(err); }
 });
 
@@ -55,8 +56,9 @@ router.get('/user/:userId', authorize('admin'), async (req, res, next) => {
             ORDER BY al.created_at DESC
             LIMIT 100
         `;
-        res.json({ success: true, data: logs });
+        return successResponse(res, 'User activity logs retrieved successfully.', logs);
     } catch (err) { next(err); }
 });
 
 export default router;
+

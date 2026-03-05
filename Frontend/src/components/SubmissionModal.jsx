@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Upload, Link as LinkIcon, FileText } from 'lucide-react';
-import { submissionAPI } from '../services/api';
+import { taskAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
 /**
@@ -61,20 +61,10 @@ const SubmissionModal = ({ task, isOpen, onClose, onSuccess }) => {
     try {
       setSubmitting(true);
 
-      // Calculate submission status
-      const deadline = new Date(task.due_date);
-      const now = new Date();
-      const status = now <= deadline ? 'on_time' : 'late';
-
-      // Submit task
-      await submissionAPI.submitTask({
-        taskId: task.id,
-        teamId: user.teamId,
-        submittedBy: user.id,
+      // Submit via the dedicated task submit endpoint
+      await taskAPI.submitTask(task.id, {
         githubLink: formData.githubLink,
         comment: formData.comment,
-        fileUrl: formData.file ? `/uploads/${formData.file.name}` : null,
-        status
       });
 
       // Success

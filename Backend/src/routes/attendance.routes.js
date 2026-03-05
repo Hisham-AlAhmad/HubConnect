@@ -11,8 +11,9 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import sql from '../db/index.js';
 import authenticate from '../middleware/authenticate.js';
-import { authorize } from '../middleware/rbac.js';
+import { authorize, cohortFilter } from '../middleware/rbac.js';
 import { validate } from '../middleware/validate.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
@@ -32,7 +33,7 @@ router.post(
                 WHERE user_id = ${req.user.id} AND date = ${dateStr}
             `;
             if (existing) {
-                return res.status(409).json({ success: false, error: 'Already checked in today.' });
+                return errorResponse(res, 'Already checked in today.', 409);
             }
 
             // Resolve organization for this user
@@ -40,7 +41,7 @@ router.post(
                 SELECT organization_id FROM organization_users WHERE user_id = ${req.user.id} LIMIT 1
             `;
             const orgId = orgRow?.organization_id ?? req.user.organizationId;
-            if (!orgId) return res.status(400).json({ success: false, error: 'User has no organization.' });
+            if (!orgId) return errorResponse(res, 'User has no organization.', 400);
 
             const notes = req.body.notes || null;
             const [record] = await sql`
@@ -48,7 +49,7 @@ router.post(
                 VALUES (${orgId}, ${req.user.id}, ${dateStr}, NOW(), 'present', ${notes})
                 RETURNING *
             `;
-            res.status(201).json({ success: true, data: record });
+            return successResponse(res, 'Checked in successfully.', record, 201);
         } catch (err) { next(err); }
     }
 );
@@ -64,10 +65,8 @@ router.post('/check-out', async (req, res, next) => {
             WHERE user_id = ${req.user.id} AND date = ${dateStr} AND check_out_time IS NULL
             RETURNING *
         `;
-        if (!record) {
-            return res.status(404).json({ success: false, error: 'No active check-in found for today.' });
-        }
-        res.json({ success: true, data: record });
+        if (!record) return errorResponse(res, 'No active check-in found for today.', 404);
+        return successResponse(res, 'Checked out successfully.', record);
     } catch (err) { next(err); }
 });
 
@@ -79,7 +78,7 @@ router.get('/today', async (req, res, next) => {
             SELECT * FROM attendance
             WHERE user_id = ${req.user.id} AND date = ${dateStr}
         `;
-        res.json({ success: true, data: record ?? null });
+        return successResponse(res, 'Today\'s attendance retrieved successfully.', record ?? null);
     } catch (err) { next(err); }
 });
 
@@ -92,33 +91,57 @@ router.get('/history', async (req, res, next) => {
             ORDER BY date DESC
             LIMIT 30
         `;
-        res.json({ success: true, data: records });
+        return successResponse(res, 'Attendance history retrieved successfully.', records);
     } catch (err) { next(err); }
 });
 
-/* ── GET /attendance/all  (admin/instructor) ───────────────────────────────── */
+/* ── GET /attendance/all  (admin/instructor — cohort-scoped) ───────────────── */
 router.get(
     '/all',
     authorize('admin', 'instructor'),
     async (req, res, next) => {
         try {
             const { date } = req.query;
-            const rows = date
-                ? await sql`
-                    SELECT a.*, p.full_name, p.avatar_url
-                    FROM attendance a
-                    JOIN profiles p ON p.id = a.user_id
-                    WHERE a.date = ${date}
-                    ORDER BY p.full_name
-                `
-                : await sql`
-                    SELECT a.*, p.full_name, p.avatar_url
-                    FROM attendance a
-                    JOIN profiles p ON p.id = a.user_id
-                    ORDER BY a.date DESC, p.full_name
-                    LIMIT 200
-                `;
-            res.json({ success: true, data: rows });
+            const { isAdmin, cohortIds } = cohortFilter(req.user);
+            let rows;
+            if (isAdmin) {
+                rows = date
+                    ? await sql`
+                        SELECT a.*, p.full_name, p.avatar_url
+                        FROM attendance a
+                        JOIN profiles p ON p.id = a.user_id
+                        WHERE a.date = ${date}
+                        ORDER BY p.full_name
+                      `
+                    : await sql`
+                        SELECT a.*, p.full_name, p.avatar_url
+                        FROM attendance a
+                        JOIN profiles p ON p.id = a.user_id
+                        ORDER BY a.date DESC, p.full_name
+                        LIMIT 200
+                      `;
+            } else {
+                rows = date
+                    ? await sql`
+                        SELECT a.*, p.full_name, p.avatar_url
+                        FROM attendance a
+                        JOIN profiles p ON p.id = a.user_id
+                        JOIN user_cohorts uc ON uc.user_id = a.user_id
+                          AND uc.cohort_id = ANY(${cohortIds ?? []}::uuid[])
+                        WHERE a.date = ${date}
+                        ORDER BY p.full_name
+                      `
+                    : await sql`
+                        SELECT DISTINCT ON (a.id) a.*, p.full_name, p.avatar_url
+                        FROM attendance a
+                        JOIN profiles p ON p.id = a.user_id
+                        JOIN user_cohorts uc ON uc.user_id = a.user_id
+                          AND uc.cohort_id = ANY(${cohortIds ?? []}::uuid[])
+                        ORDER BY a.id, a.date DESC, p.full_name
+                        LIMIT 200
+                      `;
+            }
+            return successResponse(res, 'Attendance records retrieved successfully.', rows);
         } catch (err) { next(err); }
     }
 );
@@ -130,7 +153,7 @@ router.get('/', async (req, res, next) => {
         const records = date
             ? await sql`SELECT * FROM attendance WHERE user_id = ${req.user.id} AND date = ${date}`
             : await sql`SELECT * FROM attendance WHERE user_id = ${req.user.id} ORDER BY date DESC LIMIT 30`;
-        res.json({ success: true, data: records });
+        return successResponse(res, 'Attendance records retrieved successfully.', records);
     } catch (err) { next(err); }
 });
 

@@ -10,7 +10,7 @@ const authenticate = (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ success: false, error: 'No token provided.' });
+        return res.status(401).json({ success: false, message: 'No token provided.' });
     }
 
     const token = authHeader.split(' ')[1];
@@ -23,7 +23,7 @@ const authenticate = (req, res, next) => {
         const message = err.name === 'TokenExpiredError'
             ? 'Token has expired.'
             : 'Invalid token.';
-        return res.status(401).json({ success: false, error: message });
+        return res.status(401).json({ success: false, message });
     }
 };
 

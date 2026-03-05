@@ -29,8 +29,8 @@ const Tasks = () => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const response = await taskAPI.getMyTasks(user.id, user.role, user.teamId);
-      setTasks(response.data);
+      const response = await taskAPI.getMyTasks();
+      setTasks(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {

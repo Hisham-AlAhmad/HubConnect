@@ -9,6 +9,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import sql from '../db/index.js';
 import authenticate from '../middleware/authenticate.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
@@ -42,7 +43,7 @@ router.get('/', async (req, res, next) => {
                 ORDER BY f.created_at DESC
             `;
         }
-        res.json({ success: true, data: files });
+        return successResponse(res, 'Files retrieved successfully.', files);
     } catch (err) { next(err); }
 });
 
@@ -50,8 +51,8 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
     try {
         const [file] = await sql`SELECT * FROM files WHERE id = ${req.params.id} AND deleted_at IS NULL`;
-        if (!file) return res.status(404).json({ success: false, error: 'File not found.' });
-        res.json({ success: true, data: file });
+        if (!file) return errorResponse(res, 'File not found.', 404);
+        return successResponse(res, 'File retrieved successfully.', file);
     } catch (err) { next(err); }
 });
 
@@ -61,12 +62,8 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
         const { bucketId, filePath, storageUrl, resourceType, resourceId, isPublic } = req.body;
         const organizationId = req.body.organizationId ?? req.user.organizationId;
         const file = req.file;
-        if (!file && !storageUrl) {
-            return res.status(400).json({ success: false, error: 'File or storageUrl required.' });
-        }
-        if (!organizationId) {
-            return res.status(400).json({ success: false, error: 'organizationId required.' });
-        }
+        if (!file && !storageUrl) return errorResponse(res, 'File or storageUrl required.', 400);
+        if (!organizationId) return errorResponse(res, 'organizationId required.', 400);
         const [record] = await sql`
             INSERT INTO files (organization_id, bucket_id, file_path, file_name, file_size, mime_type, storage_url, uploaded_by, resource_type, resource_id, is_public)
             VALUES (
@@ -84,7 +81,7 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
             )
             RETURNING *
         `;
-        res.status(201).json({ success: true, data: record });
+        return successResponse(res, 'File uploaded successfully.', record, 201);
     } catch (err) { next(err); }
 });
 
@@ -96,8 +93,8 @@ router.delete('/:id', async (req, res, next) => {
             WHERE id = ${req.params.id} AND (uploaded_by = ${req.user.id} OR ${req.user.role} = 'admin')
             RETURNING id
         `;
-        if (!file) return res.status(404).json({ success: false, error: 'File not found or access denied.' });
-        res.json({ success: true, message: 'File deleted.' });
+        if (!file) return errorResponse(res, 'File not found or access denied.', 404);
+        return successResponse(res, 'File deleted successfully.');
     } catch (err) { next(err); }
 });
 

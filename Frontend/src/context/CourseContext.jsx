@@ -1,6 +1,6 @@
 import { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { courseAPI } from '../services/api';
+import { courseAPI, taskAPI } from '../services/api';
 
 export const CourseContext = createContext(null);
 
@@ -72,7 +72,7 @@ export const CourseProvider = ({ children }) => {
 
     const addTaskToCourse = useCallback(async (courseId, taskData) => {
         try {
-            const res = await courseAPI.createTask(courseId, taskData);
+            const res = await taskAPI.createTask({ courseId, ...taskData });
             await fetchCourses();
             return res;
         } catch (err) {
@@ -83,7 +83,7 @@ export const CourseProvider = ({ children }) => {
 
     const updateTaskInCourse = useCallback(async (courseId, taskId, data) => {
         try {
-            const res = await courseAPI.updateTask(courseId, taskId, data);
+            const res = await taskAPI.updateTask(taskId, data);
             await fetchCourses();
             return res;
         } catch (err) {

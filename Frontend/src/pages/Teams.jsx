@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { teamAPI, courseAPI } from '../services/api';
+import { teamAPI, courseAPI, cohortAPI } from '../services/api';
 import { ROLES } from '../utils/constants';
 import {
   Users, Mail, Shield, User, Crown, Plus, Pencil, Trash2, UserPlus, UserMinus,
@@ -20,6 +20,8 @@ const Teams = () => {
   const [teamMembers, setTeamMembers] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
+  const [allCohorts, setAllCohorts] = useState([]);
+  const [cohortFilter, setCohortFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
@@ -32,6 +34,7 @@ const Teams = () => {
   // Form state
   const [teamName, setTeamName] = useState('');
   const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [selectedCohortId, setSelectedCohortId] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -41,7 +44,8 @@ const Teams = () => {
   const fetchTeams = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await teamAPI.getAllTeams();
+      const params = cohortFilter ? { cohortId: cohortFilter } : {};
+      const response = await teamAPI.getAllTeams(params);
       const teamsData = Array.isArray(response?.data) ? response.data : [];
       setTeams(teamsData);
 
@@ -62,13 +66,14 @@ const Teams = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.teamId]);
+  }, [user?.teamId, cohortFilter]);
 
   useEffect(() => {
     fetchTeams();
     if (canEdit) {
       teamAPI.getAllStudents().then(res => setAllStudents(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
       courseAPI.getAll().then(res => setAllCourses(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
+      cohortAPI.getAll().then(res => setAllCohorts(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
     }
   }, [fetchTeams, canEdit]);
 
@@ -99,18 +104,19 @@ const Teams = () => {
   };
 
   const handleCreateTeam = async () => {
-    if (!teamName.trim() || !selectedCourseId) return;
+    if (!teamName.trim() || !selectedCourseId || !selectedCohortId) return;
     try {
       setActionLoading(true);
-      const course = allCourses.find(c => c.id === selectedCourseId);
       await teamAPI.createTeam({
         name: teamName.trim(),
         courseId: selectedCourseId,
-        organizationId: course?.organization_id || user?.organizationId || '',
+        cohortId: selectedCohortId,
+        organizationId: user?.organizationId || '',
       });
       setShowCreateModal(false);
       setTeamName('');
       setSelectedCourseId('');
+      setSelectedCohortId('');
       showMessage('Team created successfully!');
       await fetchTeams();
     } catch (err) {
@@ -255,7 +261,19 @@ const Teams = () => {
         {/* Teams list */}
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-soft p-4 border border-gray-100 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">All Teams</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white">All Teams</h2>
+              {canEdit && allCohorts.length > 0 && (
+                <select
+                  value={cohortFilter}
+                  onChange={(e) => setCohortFilter(e.target.value)}
+                  className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">All Cohorts</option>
+                  {allCohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+            </div>
             {teams.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <Users size={36} className="mx-auto mb-2 opacity-50" />
@@ -476,7 +494,20 @@ const Teams = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Course</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cohort *</label>
+                <select
+                  value={selectedCohortId}
+                  onChange={(e) => setSelectedCohortId(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                >
+                  <option value="">Select a cohort</option>
+                  {allCohorts.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Course *</label>
                 <select
                   value={selectedCourseId}
                   onChange={(e) => setSelectedCourseId(e.target.value)}
@@ -498,7 +529,7 @@ const Teams = () => {
               </button>
               <button
                 onClick={handleCreateTeam}
-                disabled={!teamName.trim() || !selectedCourseId || actionLoading}
+                disabled={!teamName.trim() || !selectedCourseId || !selectedCohortId || actionLoading}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium"
               >
                 {actionLoading ? 'Creating...' : 'Create Team'}

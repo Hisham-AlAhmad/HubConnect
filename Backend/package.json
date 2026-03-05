@@ -9,7 +9,10 @@
     "dev": "node --watch src/index.js",
     "seed": "node src/db/seed.js",
     "migrate": "node src/db/migrate.js",
-    "init-db": "psql $DATABASE_URL -f init.sql"
+    "init-db": "psql $DATABASE_URL -f init.sql",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [],
   "license": "ISC",
@@ -25,5 +28,10 @@
     "multer": "^1.4.5-lts.1",
     "postgres": "^3.4.8",
     "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "supertest": "^7.0.0"
   }
 }

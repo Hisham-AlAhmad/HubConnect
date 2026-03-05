@@ -25,6 +25,7 @@ import config from '../config/index.js';
 import authenticate from '../middleware/authenticate.js';
 import { validate } from '../middleware/validate.js';
 import { generateUniqueEmail } from '../helpers/generateEmail.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 
 const router = Router();
 
@@ -32,7 +33,10 @@ const router = Router();
 const signToken = (payload) =>
     jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 
-/** Build the JWT payload + frontend-safe user object from a profiles row */
+/**
+ * Build the JWT payload + frontend-safe user object from a profiles row.
+ * `extra.cohorts` should be an array of cohort UUIDs the user belongs to.
+ */
 const buildUserPayload = (profile, extra = {}) => ({
     id:             profile.id,
     email:          profile.email,
@@ -43,7 +47,14 @@ const buildUserPayload = (profile, extra = {}) => ({
     bio:            profile.bio          || null,
     teamId:         extra.teamId         ?? null,
     organizationId: extra.organizationId ?? null,
+    cohorts:        extra.cohorts        ?? [],
 });
+
+/** Fetch all cohort IDs for a given user */
+const getUserCohorts = async (userId) => {
+    const rows = await sql`SELECT cohort_id FROM user_cohorts WHERE user_id = ${userId}`;
+    return rows.map((r) => r.cohort_id);
+};
 
 /**
  * Create a row in auth.users.
@@ -84,7 +95,7 @@ router.post(
         body('email').optional().isEmail().normalizeEmail(),
         body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
         body('name').trim().notEmpty().withMessage('Name is required'),
-        body('role').optional().isIn(['admin', 'instructor', 'student', 'team_leader']),
+        body('role').optional().isIn(['admin', 'instructor', 'student']),
     ],
     validate,
     async (req, res, next) => {
@@ -148,18 +159,19 @@ router.post(
                 return { profile, orgId };
             });
 
-            const userPayload = buildUserPayload(result.profile, { organizationId: result.orgId });
+            const cohorts = await getUserCohorts(result.profile.id);
+            const userPayload = buildUserPayload(result.profile, { organizationId: result.orgId, cohorts });
             const token       = signToken(userPayload);
 
-            return res.status(201).json({ success: true, data: { user: userPayload, token } });
+            return successResponse(res, 'Registration successful.', { user: userPayload, token }, 201);
         } catch (err) {
             // Handle our custom 409 from inside the transaction
             if (err.status === 409) {
-                return res.status(409).json({ success: false, error: err.message });
+                return errorResponse(res, err.message, 409);
             }
             // Retry on serialization failure (concurrent insert race)
             if (err.code === '40001') {
-                return res.status(409).json({ success: false, error: 'Concurrent registration conflict. Please try again.' });
+                return errorResponse(res, 'Concurrent registration conflict. Please try again.', 409);
             }
             next(err);
         }
@@ -184,28 +196,32 @@ router.post(
             `;
 
             if (!profile) {
-                return res.status(401).json({ success: false, error: 'Invalid email or password.' });
+                return errorResponse(res, 'Invalid email or password.', 401);
             }
             if (!profile.password_hash) {
-                return res.status(401).json({ success: false, error: 'Account has no password set. Use SSO or reset your password.' });
+                return errorResponse(res, 'Account has no password set. Use SSO or reset your password.', 401);
             }
 
             const valid = await bcrypt.compare(password, profile.password_hash);
             if (!valid) {
-                return res.status(401).json({ success: false, error: 'Invalid email or password.' });
+                return errorResponse(res, 'Invalid email or password.', 401);
             }
 
-            // Resolve team & org
-            const [teamMember] = await sql`SELECT team_id FROM team_members WHERE user_id = ${profile.id} LIMIT 1`;
-            const [orgUser]    = await sql`SELECT organization_id FROM organization_users WHERE user_id = ${profile.id} LIMIT 1`;
+            // Resolve team, org & cohorts in parallel
+            const [[teamMember], [orgUser], cohorts] = await Promise.all([
+                sql`SELECT team_id FROM team_members WHERE user_id = ${profile.id} LIMIT 1`,
+                sql`SELECT organization_id FROM organization_users WHERE user_id = ${profile.id} LIMIT 1`,
+                getUserCohorts(profile.id),
+            ]);
 
             const userPayload = buildUserPayload(profile, {
                 teamId:         teamMember?.team_id         || null,
                 organizationId: orgUser?.organization_id    || null,
+                cohorts,
             });
             const token = signToken(userPayload);
 
-            return res.json({ success: true, data: { user: userPayload, token } });
+            return successResponse(res, 'Login successful.', { user: userPayload, token });
         } catch (err) {
             next(err);
         }
@@ -216,17 +232,21 @@ router.post(
 router.get('/me', authenticate, async (req, res, next) => {
     try {
         const [profile] = await sql`SELECT * FROM profiles WHERE id = ${req.user.id} LIMIT 1`;
-        if (!profile) return res.status(404).json({ success: false, error: 'User not found.' });
+        if (!profile) return errorResponse(res, 'User not found.', 404);
 
-        const [teamMember] = await sql`SELECT team_id FROM team_members WHERE user_id = ${profile.id} LIMIT 1`;
-        const [orgUser]    = await sql`SELECT organization_id FROM organization_users WHERE user_id = ${profile.id} LIMIT 1`;
+        const [[teamMember], [orgUser], cohorts] = await Promise.all([
+            sql`SELECT team_id FROM team_members WHERE user_id = ${profile.id} LIMIT 1`,
+            sql`SELECT organization_id FROM organization_users WHERE user_id = ${profile.id} LIMIT 1`,
+            getUserCohorts(profile.id),
+        ]);
 
         const userPayload = buildUserPayload(profile, {
             teamId:         teamMember?.team_id         || null,
             organizationId: orgUser?.organization_id    || null,
+            cohorts,
         });
 
-        return res.json({ success: true, data: { user: userPayload } });
+        return successResponse(res, 'Profile retrieved successfully.', { user: userPayload });
     } catch (err) {
         next(err);
     }
@@ -235,7 +255,7 @@ router.get('/me', authenticate, async (req, res, next) => {
 /* ── POST /logout ─────────────────────────────────────────── */
 router.post('/logout', authenticate, (_req, res) => {
     // Stateless JWT — client discards the token
-    res.json({ success: true, message: 'Logged out successfully.' });
+    successResponse(res, 'Logged out successfully.');
 });
 
 /* ── PUT /profile ─────────────────────────────────────────── */
@@ -262,7 +282,7 @@ router.put(
                 WHERE id = ${req.user.id}
                 RETURNING *
             `;
-            return res.json({ success: true, data: { user: buildUserPayload(profile) } });
+            return successResponse(res, 'Profile updated successfully.', { user: buildUserPayload(profile) });
         } catch (err) {
             next(err);
         }
@@ -284,12 +304,12 @@ router.put(
             const [profile] = await sql`SELECT password_hash FROM profiles WHERE id = ${req.user.id}`;
 
             const valid = await bcrypt.compare(currentPassword, profile?.password_hash ?? '');
-            if (!valid) return res.status(400).json({ success: false, error: 'Current password is incorrect.' });
+            if (!valid) return errorResponse(res, 'Current password is incorrect.', 400);
 
             const hash = await bcrypt.hash(newPassword, config.bcryptRounds);
             await sql`UPDATE profiles SET password_hash = ${hash}, updated_at = CURRENT_TIMESTAMP WHERE id = ${req.user.id}`;
 
-            return res.json({ success: true, message: 'Password updated successfully.' });
+            return successResponse(res, 'Password updated successfully.');
         } catch (err) {
             next(err);
         }
@@ -312,11 +332,13 @@ router.post(
                     SET reset_token = ${resetToken}, reset_token_expires_at = ${resetExpires.toISOString()}
                     WHERE id = ${profile.id}
                 `;
-                // In production: email the reset link. Log for dev.
-                console.info(`[Reset token for ${req.body.email}]: ${resetToken}`);
+                // In production: email the reset link. Log for dev only.
+                if (config.nodeEnv !== 'production') {
+                    console.info(`[Reset token for ${req.body.email}]: ${resetToken}`);
+                }
             }
             // Always return success to prevent email enumeration
-            return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+            return successResponse(res, 'If that email exists, a reset link has been sent.');
         } catch (err) {
             next(err);
         }
@@ -336,8 +358,8 @@ router.post(
               AND reset_token_expires_at > NOW()
             LIMIT 1
         `.catch(() => []);
-        if (!profile) return res.status(400).json({ success: false, error: 'Reset token is invalid or expired.' });
-        return res.json({ success: true, valid: true });
+        if (!profile) return errorResponse(res, 'Reset token is invalid or expired.', 400);
+        return successResponse(res, 'Reset token is valid.', { valid: true });
     }
 );
 
@@ -360,7 +382,7 @@ router.post(
                   AND reset_token_expires_at > NOW()
                 LIMIT 1
             `;
-            if (!profile) return res.status(400).json({ success: false, error: 'Reset token is invalid or expired.' });
+            if (!profile) return errorResponse(res, 'Reset token is invalid or expired.', 400);
 
             const hash = await bcrypt.hash(password, config.bcryptRounds);
             await sql`
@@ -369,7 +391,7 @@ router.post(
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ${profile.id}
             `;
-            return res.json({ success: true, message: 'Password reset successfully.' });
+            return successResponse(res, 'Password reset successfully.');
         } catch (err) {
             next(err);
         }

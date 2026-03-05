@@ -73,27 +73,32 @@ export const authAPI = {
 
 // ── TASK API ──────────────────────────────────────────────────────────────────
 export const taskAPI = {
-  getAllTasks: () => instance.get('/tasks'),
+  getAllTasks: (params) => instance.get('/tasks', { params }),
   getTaskById: (id) => instance.get(`/tasks/${id}`),
   getMyTasks: () => instance.get('/tasks/my'),
   createTask: (data) => instance.post('/tasks', data),
   updateTask: (id, data) => instance.put(`/tasks/${id}`, data),
   deleteTask: (id) => instance.delete(`/tasks/${id}`),
+  /** New structured submit endpoint */
+  submitTask: (taskId, data) => instance.post(`/tasks/${taskId}/submit`, data),
 };
 
 // ── SUBMISSION API ────────────────────────────────────────────────────────────
 export const submissionAPI = {
-  getAllSubmissions: () => instance.get('/submissions'),
+  getAllSubmissions: (params) => instance.get('/submissions', { params }),
   getSubmissionsByTask: (taskId) => instance.get(`/submissions/task/${taskId}`),
+  /** Legacy submit — prefer taskAPI.submitTask */
   submitTask: (taskId, data) => instance.post('/submissions', { taskId, ...data }),
   checkSubmission: (taskId) => instance.get(`/submissions/check/${taskId}`),
   reviewSubmission: (id, data) => instance.put(`/submissions/${id}/review`, data),
+  /** Grade a submission: { grade, feedback } */
+  assessSubmission: (id, data) => instance.patch(`/submissions/${id}/assess`, data),
 };
 
 // ── TEAM API ──────────────────────────────────────────────────────────────────
 export const teamAPI = {
-  getAllTeams: () => instance.get('/teams'),
-  getAll: () => instance.get('/teams'),
+  getAllTeams: (params) => instance.get('/teams', { params }),
+  getAll: (params) => instance.get('/teams', { params }),
   getTeamById: (id) => instance.get(`/teams/${id}`),
   getTeamMembers: (id) => instance.get(`/teams/${id}/members`),
   createTeam: (data) => instance.post('/teams', data),
@@ -101,7 +106,9 @@ export const teamAPI = {
   deleteTeam: (id) => instance.delete(`/teams/${id}`),
   addMember: (id, userId) => instance.post(`/teams/${id}/members`, { userId }),
   removeMember: (id, userId) => instance.delete(`/teams/${id}/members/${userId}`),
-  getAllStudents: () => instance.get('/profiles/students'),
+  getAllStudents: (params) => instance.get('/profiles/students', { params }),
+  /** Get or create a team's dedicated chat room */
+  getTeamChatRoom: (teamId) => instance.post(`/chat/rooms/team/${teamId}`),
 };
 
 // ── CHECK-IN API ──────────────────────────────────────────────────────────────
@@ -132,19 +139,21 @@ export const analyticsAPI = {
 
 // ── COURSE API ────────────────────────────────────────────────────────────────
 export const courseAPI = {
-  getAll: () => instance.get('/courses'),
+  getAll: (params) => instance.get('/courses', { params }),
   getById: (id) => instance.get(`/courses/${id}`),
   create: (data) => instance.post('/courses', data),
   update: (id, data) => instance.put(`/courses/${id}`, data),
   finish: (id) => instance.patch(`/courses/${id}/finish`),
+  // Cohort assignment (global template model)
+  assignToCohort: (id, cohortId) => instance.post(`/courses/${id}/assign-cohort`, { cohortId }),
+  removeFromCohort: (id, cohortId) => instance.delete(`/courses/${id}/assign-cohort/${cohortId}`),
+  // Team management inside course
   addTeam: (id, data) => instance.post(`/courses/${id}/teams`, data),
   removeTeam: (id, teamId) => instance.delete(`/courses/${id}/teams/${teamId}`),
   assignLeader: (id, teamId, userId) => instance.post(`/courses/${id}/teams/${teamId}/leader`, { userId }),
   addMember: (id, teamId, userId) => instance.post(`/courses/${id}/teams/${teamId}/members`, { userId }),
   removeMember: (id, teamId, userId) => instance.delete(`/courses/${id}/teams/${teamId}/members/${userId}`),
   getTasks: (id) => instance.get(`/courses/${id}/tasks`),
-  createTask: (id, data) => instance.post(`/courses/${id}/tasks`, data),
-  updateTask: (id, taskId, data) => instance.put(`/courses/${id}/tasks/${taskId}`, data),
 };
 
 // ── COHORT API ────────────────────────────────────────────────────────────────
@@ -156,6 +165,11 @@ export const cohortAPI = {
   delete: (id) => instance.delete(`/cohorts/${id}`),
   assignInstructor: (id, instructorId) => instance.post(`/cohorts/${id}/instructor`, { instructorId }),
   removeInstructor: (id, userId) => instance.delete(`/cohorts/${id}/instructor/${userId}`),
+  // Student management
+  getStudents: (id, params) => instance.get(`/cohorts/${id}/students`, { params }),
+  addStudent: (id, studentId) => instance.post(`/cohorts/${id}/students`, { studentId }),
+  bulkAddStudents: (id, studentIds) => instance.post(`/cohorts/${id}/students/bulk`, { studentIds }),
+  removeStudent: (id, userId) => instance.delete(`/cohorts/${id}/students/${userId}`),
 };
 
 // ── NOTIFICATION API ──────────────────────────────────────────────────────────
@@ -168,7 +182,7 @@ export const notificationAPI = {
 // ── PROFILE API ───────────────────────────────────────────────────────────────
 export const profileAPI = {
   getAll: () => instance.get('/profiles'),
-  getStudents: () => instance.get('/profiles/students'),
+  getStudents: (params) => instance.get('/profiles/students', { params }),
   getInstructors: () => instance.get('/profiles/instructors'),
   getById: (id) => instance.get(`/profiles/${id}`),
   update: (id, data) => instance.put(`/profiles/${id}`, data),

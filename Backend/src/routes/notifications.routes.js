@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import sql from '../db/index.js';
 import authenticate from '../middleware/authenticate.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
@@ -24,7 +25,7 @@ router.get('/', async (req, res, next) => {
             LIMIT ${limit}
         `;
         const unreadCount = notifications.filter(n => n.status === 'unread').length;
-        res.json({ success: true, data: { notifications, unreadCount } });
+        return successResponse(res, 'Notifications retrieved successfully.', { notifications, unreadCount });
     } catch (err) { next(err); }
 });
 
@@ -36,7 +37,7 @@ router.put('/read-all', async (req, res, next) => {
             SET status = 'read', read_at = CURRENT_TIMESTAMP
             WHERE recipient_id = ${req.user.id} AND status = 'unread'
         `;
-        res.json({ success: true, message: 'All notifications marked as read.' });
+        return successResponse(res, 'All notifications marked as read.');
     } catch (err) { next(err); }
 });
 
@@ -49,8 +50,8 @@ router.put('/:id/read', async (req, res, next) => {
             WHERE id = ${req.params.id} AND recipient_id = ${req.user.id}
             RETURNING id
         `;
-        if (!notification) return res.status(404).json({ success: false, error: 'Notification not found.' });
-        res.json({ success: true, message: 'Marked as read.' });
+        if (!notification) return errorResponse(res, 'Notification not found.', 404);
+        return successResponse(res, 'Notification marked as read.');
     } catch (err) { next(err); }
 });
 

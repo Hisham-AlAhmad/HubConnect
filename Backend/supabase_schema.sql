@@ -7,7 +7,7 @@
 -- 1. ENUM TYPES
 -- ============================================
 
-CREATE TYPE user_role_type AS ENUM ('admin', 'instructor', 'student', 'team_leader');
+CREATE TYPE user_role_type AS ENUM ('admin', 'instructor', 'student');
 CREATE TYPE course_status AS ENUM ('active', 'archived', 'completed');
 CREATE TYPE task_status AS ENUM ('pending', 'in_progress', 'submitted', 'accepted', 'rejected');
 CREATE TYPE task_priority AS ENUM ('low', 'medium', 'high');
@@ -208,7 +208,7 @@ CREATE INDEX idx_user_cohorts_cohort_id ON user_cohorts(cohort_id);
 CREATE TABLE courses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    cohort_id UUID NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+    cohort_id UUID REFERENCES cohorts(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     status course_status DEFAULT 'active',
@@ -232,6 +232,31 @@ CREATE INDEX idx_courses_created_at ON courses(created_at DESC);
 CREATE INDEX idx_courses_org_status ON courses(organization_id, status);
 
 -- ============================================
+-- 7b. COHORT_COURSES (M:N junction — global course templates)
+-- ============================================
+
+CREATE TABLE cohort_courses (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    cohort_id       UUID NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    assigned_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    assigned_by     UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    UNIQUE(cohort_id, course_id)
+);
+
+CREATE INDEX idx_cohort_courses_cohort  ON cohort_courses(cohort_id);
+CREATE INDEX idx_cohort_courses_course  ON cohort_courses(course_id);
+CREATE INDEX idx_cohort_courses_org_id  ON cohort_courses(organization_id);
+
+-- Migrate any existing course→cohort relationships into the junction
+INSERT INTO cohort_courses (organization_id, cohort_id, course_id)
+SELECT organization_id, cohort_id, id
+FROM courses
+WHERE cohort_id IS NOT NULL
+ON CONFLICT (cohort_id, course_id) DO NOTHING;
+
+-- ============================================
 -- 8. TEAMS
 -- ============================================
 
@@ -239,6 +264,7 @@ CREATE TABLE teams (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    cohort_id UUID REFERENCES cohorts(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     team_leader_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -258,13 +284,14 @@ CREATE INDEX idx_teams_org_id ON teams(organization_id);
 CREATE INDEX idx_teams_course_id ON teams(course_id);
 CREATE INDEX idx_teams_team_leader_id ON teams(team_leader_id);
 CREATE INDEX idx_teams_org_course ON teams(organization_id, course_id);
+CREATE INDEX idx_teams_cohort_id ON teams(cohort_id);
 
 CREATE TABLE team_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    role user_role_type DEFAULT 'student',
+    role VARCHAR(50) DEFAULT 'student',
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -297,6 +324,8 @@ CREATE TABLE tasks (
     due_date DATE NOT NULL,
     github_repo_url VARCHAR(500),
     assignee_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    cohort_id UUID REFERENCES cohorts(id) ON DELETE SET NULL,
+    assignment_type VARCHAR(50) NOT NULL DEFAULT 'individual',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -314,6 +343,8 @@ CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_tasks_assignee_id ON tasks(assignee_id);
 CREATE INDEX idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX idx_tasks_org_course ON tasks(organization_id, course_id);
+CREATE INDEX idx_tasks_cohort_id ON tasks(cohort_id);
+CREATE INDEX idx_tasks_assignment_type ON tasks(assignment_type);
 CREATE INDEX idx_tasks_course_status ON tasks(course_id, status);
 
 CREATE TABLE task_assignments (
@@ -338,6 +369,24 @@ CREATE INDEX idx_task_assignments_user_id ON task_assignments(user_id);
 CREATE INDEX idx_task_assignments_org_id ON task_assignments(organization_id);
 
 -- ============================================
+-- 9b. TASK_TEAM_ASSIGNMENTS (team-level task assignment)
+-- ============================================
+
+CREATE TABLE task_team_assignments (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    task_id         UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    team_id         UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    assigned_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    assigned_by     UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    UNIQUE(task_id, team_id)
+);
+
+CREATE INDEX idx_task_team_assignments_task ON task_team_assignments(task_id);
+CREATE INDEX idx_task_team_assignments_team ON task_team_assignments(team_id);
+CREATE INDEX idx_task_team_assignments_org  ON task_team_assignments(organization_id);
+
+-- ============================================
 -- 10. SUBMISSIONS
 -- ============================================
 
@@ -354,6 +403,10 @@ CREATE TABLE submissions (
     reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     reviewed_at TIMESTAMP WITH TIME ZONE,
     review_comment TEXT,
+    grade NUMERIC(5,2),
+    feedback TEXT,
+    assessed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    assessed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -399,17 +452,21 @@ CREATE TABLE chat_rooms (
     room_type VARCHAR(50) NOT NULL,
     course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
     team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
+    cohort_id UUID REFERENCES cohorts(id) ON DELETE SET NULL,
+    dm_participant_ids UUID[] DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
     updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     deleted_at TIMESTAMP WITH TIME ZONE,
     
-    CONSTRAINT valid_room_type CHECK (room_type IN ('general', 'course', 'team')),
+    CONSTRAINT valid_room_type CHECK (room_type IN ('general', 'course', 'team', 'cohort', 'dm')),
     CONSTRAINT room_context CHECK (
         (room_type = 'general' AND course_id IS NULL AND team_id IS NULL) OR
-        (room_type = 'course' AND course_id IS NOT NULL AND team_id IS NULL) OR
-        (room_type = 'team' AND course_id IS NOT NULL AND team_id IS NOT NULL)
+        (room_type = 'course'  AND course_id IS NOT NULL AND team_id IS NULL) OR
+        (room_type = 'team'    AND course_id IS NOT NULL AND team_id IS NOT NULL) OR
+        (room_type = 'cohort'  AND cohort_id IS NOT NULL) OR
+        (room_type = 'dm')
     )
 );
 
@@ -417,6 +474,9 @@ CREATE INDEX idx_chat_rooms_org_id ON chat_rooms(organization_id);
 CREATE INDEX idx_chat_rooms_course_id ON chat_rooms(course_id);
 CREATE INDEX idx_chat_rooms_team_id ON chat_rooms(team_id);
 CREATE INDEX idx_chat_rooms_room_type ON chat_rooms(room_type);
+CREATE INDEX idx_chat_rooms_cohort_id ON chat_rooms(cohort_id);
+CREATE UNIQUE INDEX idx_chat_rooms_dm_participants ON chat_rooms (dm_participant_ids) WHERE room_type = 'dm';
+CREATE INDEX idx_chat_rooms_dm_lookup ON chat_rooms USING GIN (dm_participant_ids) WHERE room_type = 'dm';
 
 CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -752,6 +812,56 @@ CREATE TRIGGER set_files_created_by BEFORE INSERT ON files
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
 
+-- ============================================
+-- RLS HELPER FUNCTIONS
+-- These are used inside RLS policies below.
+-- All are SECURITY DEFINER so they can read RLS-protected tables.
+-- ============================================
+
+CREATE OR REPLACE FUNCTION current_user_id()
+RETURNS UUID
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+    SELECT auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION current_user_role()
+RETURNS TEXT
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+    SELECT role FROM profiles WHERE id = auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM profiles
+        WHERE id = auth.uid() AND role = 'admin' AND deleted_at IS NULL
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION is_instructor()
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM profiles
+        WHERE id = auth.uid() AND role = 'instructor' AND deleted_at IS NULL
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION current_cohort_ids()
+RETURNS UUID[]
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+    SELECT COALESCE(
+        ARRAY(SELECT cohort_id FROM user_cohorts WHERE user_id = auth.uid() AND deleted_at IS NULL),
+        '{}'::uuid[]
+    );
+$$;
+
 -- Enable RLS on all tables
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -799,6 +909,23 @@ CREATE POLICY "Org admins can read all profiles" ON profiles
             AND user_roles.role_id IN (
                 SELECT id FROM roles WHERE name = 'admin'
             )
+        )
+    );
+
+-- Instructors can read profiles of students/instructors in their cohorts
+CREATE POLICY "Instructors can read cohort profiles" ON profiles
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM user_cohorts uc_viewer
+            JOIN user_cohorts uc_target ON uc_target.cohort_id = uc_viewer.cohort_id
+            WHERE uc_viewer.user_id = auth.uid()
+              AND uc_target.user_id = profiles.id
+              AND uc_viewer.deleted_at IS NULL
+              AND uc_target.deleted_at IS NULL
+        )
+        AND EXISTS (
+            SELECT 1 FROM profiles viewer
+            WHERE viewer.id = auth.uid() AND viewer.role = 'instructor'
         )
     );
 
@@ -1064,16 +1191,41 @@ CREATE POLICY "Users can view messages in accessible rooms" ON messages
             SELECT 1 FROM chat_rooms
             WHERE chat_rooms.id = messages.chat_room_id
             AND (
+                -- General rooms: any authenticated user
                 chat_rooms.room_type = 'general'
-                OR EXISTS (
-                    SELECT 1 FROM organization_users
-                    WHERE organization_users.organization_id = messages.organization_id
-                    AND organization_users.user_id = auth.uid()
+                -- DM rooms: only participants
+                OR (
+                    chat_rooms.room_type = 'dm'
+                    AND auth.uid() = ANY(chat_rooms.dm_participant_ids)
                 )
-                OR EXISTS (
-                    SELECT 1 FROM team_members
-                    WHERE team_members.team_id = chat_rooms.team_id
-                    AND team_members.user_id = auth.uid()
+                -- Cohort rooms: user belongs to the cohort
+                OR (
+                    chat_rooms.room_type = 'cohort'
+                    AND chat_rooms.cohort_id IN (
+                        SELECT cohort_id FROM user_cohorts
+                        WHERE user_id = auth.uid() AND deleted_at IS NULL
+                    )
+                )
+                -- Team rooms: must be a team member OR instructor of that cohort
+                OR (
+                    chat_rooms.room_type IN ('team', 'course')
+                    AND (
+                        EXISTS (
+                            SELECT 1 FROM team_members
+                            WHERE team_members.team_id = chat_rooms.team_id
+                            AND team_members.user_id = auth.uid()
+                        )
+                        OR (
+                            is_admin()
+                        )
+                        OR (
+                            is_instructor()
+                            AND chat_rooms.cohort_id IN (
+                                SELECT cohort_id FROM user_cohorts
+                                WHERE user_id = auth.uid() AND deleted_at IS NULL
+                            )
+                        )
+                    )
                 )
             )
         )

@@ -13,6 +13,7 @@ import sql from '../db/index.js';
 import authenticate from '../middleware/authenticate.js';
 import { authorize } from '../middleware/rbac.js';
 import { validate } from '../middleware/validate.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
@@ -20,7 +21,7 @@ router.use(authenticate);
 router.get('/', async (_req, res, next) => {
     try {
         const roles = await sql`SELECT * FROM roles ORDER BY name`;
-        res.json({ success: true, data: roles });
+        return successResponse(res, 'Roles retrieved successfully.', roles);
     } catch (err) { next(err); }
 });
 
@@ -38,8 +39,8 @@ router.post(
                 ON CONFLICT (organization_id, name) DO NOTHING
                 RETURNING *
             `;
-            if (!role) return res.status(409).json({ success: false, error: 'Role already exists.' });
-            res.status(201).json({ success: true, data: role });
+            if (!role) return errorResponse(res, 'Role already exists.', 409);
+            return successResponse(res, 'Role created successfully.', role, 201);
         } catch (err) { next(err); }
     }
 );
@@ -47,28 +48,32 @@ router.post(
 router.put('/:id', authorize('admin'), [body('name').trim().notEmpty()], validate, async (req, res, next) => {
     try {
         const [role] = await sql`UPDATE roles SET name = ${req.body.name} WHERE id = ${req.params.id} AND is_system_role = false RETURNING *`;
-        if (!role) return res.status(404).json({ success: false, error: 'Role not found or is a system role.' });
-        res.json({ success: true, data: role });
+        if (!role) return errorResponse(res, 'Role not found or is a system role.', 404);
+        return successResponse(res, 'Role updated successfully.', role);
     } catch (err) { next(err); }
 });
 
 router.delete('/:id', authorize('admin'), async (req, res, next) => {
     try {
         const result = await sql`DELETE FROM roles WHERE id = ${req.params.id} AND is_system_role = false RETURNING id`;
-        if (!result.length) return res.status(404).json({ success: false, error: 'Role not found or is a system role.' });
-        res.json({ success: true, message: 'Role deleted.' });
+        if (!result.length) return errorResponse(res, 'Role not found or is a system role.', 404);
+        return successResponse(res, 'Role deleted successfully.');
     } catch (err) { next(err); }
 });
 
+/* GET /roles/user/:userId — admin can view any user; non-admin can only view their own roles */
 router.get('/user/:userId', async (req, res, next) => {
     try {
+        if (req.user.role !== 'admin' && req.user.id !== req.params.userId) {
+            return errorResponse(res, 'Access denied.', 403);
+        }
         const roles = await sql`
             SELECT r.*, ur.assigned_at
             FROM user_roles ur
             JOIN roles r ON r.id = ur.role_id
             WHERE ur.user_id = ${req.params.userId}
         `;
-        res.json({ success: true, data: roles });
+        return successResponse(res, 'User roles retrieved successfully.', roles);
     } catch (err) { next(err); }
 });
 
@@ -83,7 +88,7 @@ router.post(
 
             // Update profiles.role to match the role name for quick JWT reads
             const [role] = await sql`SELECT name FROM roles WHERE id = ${roleId}`;
-            if (!role) return res.status(404).json({ success: false, error: 'Role not found.' });
+            if (!role) return errorResponse(res, 'Role not found.', 404);
             await sql`UPDATE profiles SET role = ${role.name} WHERE id = ${userId}`;
 
             const [assignment] = await sql`
@@ -92,7 +97,7 @@ router.post(
                 ON CONFLICT (organization_id, user_id, role_id) DO NOTHING
                 RETURNING *
             `;
-            res.status(201).json({ success: true, data: assignment });
+            return successResponse(res, 'Role assigned successfully.', assignment, 201);
         } catch (err) { next(err); }
     }
 );

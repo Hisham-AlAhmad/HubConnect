@@ -7,15 +7,16 @@ ALTER TABLE chat_rooms DROP CONSTRAINT IF EXISTS valid_room_scope;
 ALTER TABLE chat_rooms DROP CONSTRAINT IF EXISTS room_context;
 ALTER TABLE chat_rooms DROP CONSTRAINT IF EXISTS chat_rooms_room_type_check;
 
--- 2. Recreate room_type constraint with 'dm' included
+-- 2. Recreate room_type constraint with 'cohort' and 'dm' included
 ALTER TABLE chat_rooms ADD CONSTRAINT valid_room_type
-    CHECK (room_type IN ('general', 'course', 'team', 'dm'));
+    CHECK (room_type IN ('general', 'course', 'team', 'cohort', 'dm'));
 
--- 3. Recreate room_scope constraint with 'dm' case
+-- 3. Recreate room_scope constraint with 'cohort' and 'dm' cases
 ALTER TABLE chat_rooms ADD CONSTRAINT valid_room_scope CHECK (
     (room_type = 'general' AND course_id IS NULL AND team_id IS NULL) OR
-    (room_type = 'course' AND course_id IS NOT NULL AND team_id IS NULL) OR
-    (room_type = 'team' AND course_id IS NOT NULL AND team_id IS NOT NULL) OR
+    (room_type = 'course'  AND course_id IS NOT NULL AND team_id IS NULL) OR
+    (room_type = 'team'    AND course_id IS NOT NULL AND team_id IS NOT NULL) OR
+    (room_type = 'cohort'  AND cohort_id IS NOT NULL) OR
     (room_type = 'dm' AND course_id IS NULL AND team_id IS NULL)
 );
 

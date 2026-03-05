@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useCohort } from '../context/CohortContext';
-import { teamAPI, authAPI, profileAPI } from '../services/api';
+import { authAPI, profileAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 import {
     Users, Search, Mail, Shield, User, Crown, Filter,
@@ -21,7 +21,10 @@ const Students = () => {
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [cohortFilter, setCohortFilter] = useState('all');
+    const [cohortFilter, setCohortFilter] = useState('');
+    const [page, setPage] = useState(1);
+    const [meta, setMeta] = useState({ total: 0, pages: 1 });
+    const LIMIT = 20;
 
     // Create modal state
     const [showCreate, setShowCreate] = useState(false);
@@ -35,11 +38,15 @@ const Students = () => {
     const [editLoading, setEditLoading] = useState(false);
     const [editError, setEditError] = useState('');
 
-    const fetchStudents = async () => {
+    const fetchStudents = async (pageNum = page) => {
         try {
             setLoading(true);
-            const res = await teamAPI.getAllStudents();
+            const params = { page: pageNum, limit: LIMIT };
+            if (search.trim()) params.search = search.trim();
+            if (cohortFilter) params.cohortId = cohortFilter;
+            const res = await profileAPI.getStudents(params);
             setStudents(Array.isArray(res?.data) ? res.data : []);
+            if (res?.meta) setMeta(res.meta);
         } catch (err) {
             console.error('Error fetching students:', err);
             setStudents([]);
@@ -48,7 +55,14 @@ const Students = () => {
         }
     };
 
-    useEffect(() => { fetchStudents(); }, []);
+    // Re-fetch when filter or page changes
+    useEffect(() => { fetchStudents(page); }, [cohortFilter, page]);
+
+    // Debounced search — reset to page 1 when search text changes
+    useEffect(() => {
+        const t = setTimeout(() => { setPage(1); fetchStudents(1); }, 400);
+        return () => clearTimeout(t);
+    }, [search]);
 
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
@@ -79,14 +93,7 @@ const Students = () => {
         }
     };
 
-    const filtered = students.filter((s) => {
-        const name = (s.full_name || '').toLowerCase();
-        const email = (s.email || '').toLowerCase();
-        const q = search.toLowerCase();
-        const matchesSearch = name.includes(q) || email.includes(q);
-        const matchesCohort = cohortFilter === 'all' || s.cohort_id === cohortFilter;
-        return matchesSearch && matchesCohort;
-    });
+    const filtered = students; // filtering is handled server-side
 
     const getRoleBadge = (role) => {
         if (role === 'team_leader') return { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', label: 'Team Leader', icon: Crown };
@@ -161,10 +168,10 @@ const Students = () => {
                 <div className="relative">
                     <select
                         value={cohortFilter}
-                        onChange={(e) => setCohortFilter(e.target.value)}
+                        onChange={(e) => { setCohortFilter(e.target.value); setPage(1); }}
                         className="appearance-none pl-4 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm min-w-[180px]"
                     >
-                        <option value="all">All Cohorts</option>
+                        <option value="">All Cohorts</option>
                         {cohorts.map((c) => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
@@ -177,7 +184,7 @@ const Students = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
-                    <p className="text-2xl font-bold text-gray-800 dark:text-white">{filtered.length}</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-white">{meta.total || filtered.length}</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">In Teams</p>
@@ -256,6 +263,34 @@ const Students = () => {
                     </div>
                 )}
             </div>
+
+            {/* Pagination */}
+            {meta.pages > 1 && (
+                <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Showing {students.length} of {meta.total} students
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={page <= 1 || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
+                            Page {page} of {meta.pages}
+                        </span>
+                        <button
+                            onClick={() => setPage((p) => Math.min(meta.pages, p + 1))}
+                            disabled={page >= meta.pages || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Create Student Modal */}
             {showCreate && (
