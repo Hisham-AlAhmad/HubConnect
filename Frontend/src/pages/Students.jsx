@@ -127,7 +127,7 @@ const Students = () => {
         }
     };
 
-    if (loading) {
+    if (loading && !students.length) {
         return (
             <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -146,9 +146,9 @@ const Students = () => {
             </div>
 
             <button
-                    onClick={() => { setShowCreate(true); setError(''); }}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-                >
+                onClick={() => { setShowCreate(true); setError(''); }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+            >
                 <Plus className="w-4 h-4" />
                 New Student
             </button>

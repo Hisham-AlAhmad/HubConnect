@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { cohortAPI } from '../services/api';
+import { cohortAPI, profileAPI, courseAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import Avatar from '../components/Avatar';
 import {
     ArrowLeft, GraduationCap, Calendar, Users, Shield, User,
-    BookOpen, Mail, AlertCircle
+    BookOpen, Mail, AlertCircle, Plus, X, Trash2
 } from 'lucide-react';
 
 /**
@@ -21,13 +21,32 @@ const CohortDetails = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // Instructor + course modal state
+    const [showAddInstructor, setShowAddInstructor] = useState(false);
+    const [allInstructors, setAllInstructors] = useState([]);
+    const [selectedInstructor, setSelectedInstructor] = useState('');
+    const [addInstLoading, setAddInstLoading] = useState(false);
+    const [addInstError, setAddInstError] = useState('');
+
+    const [showAddCourse, setShowAddCourse] = useState(false);
+    const [allCourses, setAllCourses] = useState([]);
+    const [selectedCourse, setSelectedCourse] = useState('');
+    const [addCourseLoading, setAddCourseLoading] = useState(false);
+    const [addCourseError, setAddCourseError] = useState('');
+
     useEffect(() => {
         const fetchCohort = async () => {
             try {
                 setLoading(true);
                 setError('');
-                const res = await cohortAPI.getById(id);
+                const [res, instRes, courseRes] = await Promise.all([
+                    cohortAPI.getById(id),
+                    profileAPI.getInstructors(),
+                    courseAPI.getAll(),
+                ]);
                 setCohort(res?.data || null);
+                setAllInstructors(Array.isArray(instRes?.data) ? instRes.data : []);
+                setAllCourses(Array.isArray(courseRes?.data) ? courseRes.data : []);
             } catch (err) {
                 console.error('Error fetching cohort:', err);
                 setError('Failed to load cohort details.');
@@ -78,6 +97,124 @@ const CohortDetails = () => {
     const instructors = (cohort.members || []).filter(m => m.role === 'instructor');
     const students = (cohort.members || []).filter(m => m.role === 'student');
     const courses = cohort.courses || [];
+
+    const handleAddInstructor = async () => {
+        if (!selectedInstructor) { setAddInstError('Please select an instructor'); return; }
+        try {
+            setAddInstLoading(true);
+            await cohortAPI.assignInstructor(id, selectedInstructor);
+            setShowAddInstructor(false);
+            setSelectedInstructor('');
+            const res = await cohortAPI.getById(id);
+            setCohort(res?.data || null);
+        } catch (err) {
+            setAddInstError(err?.response?.data?.error || 'Failed to add instructor');
+        } finally {
+            setAddInstLoading(false);
+        }
+    };
+
+    const handleRemoveInstructor = async (userId) => {
+        try {
+            await cohortAPI.removeInstructor(id, userId);
+            const res = await cohortAPI.getById(id);
+            setCohort(res?.data || null);
+        } catch (err) { console.error(err); }
+    };
+
+    const handleAddCourse = async () => {
+        if (!selectedCourse) { setAddCourseError('Please select a course'); return; }
+        try {
+            setAddCourseLoading(true);
+            await cohortAPI.addCourse(id, selectedCourse);
+            setShowAddCourse(false);
+            setSelectedCourse('');
+            const res = await cohortAPI.getById(id);
+            setCohort(res?.data || null);
+        } catch (err) {
+            setAddCourseError(err?.response?.data?.error || 'Failed to add course');
+        } finally {
+            setAddCourseLoading(false);
+        }
+    };
+
+    const handleRemoveCourse = async (courseId) => {
+        try {
+            await cohortAPI.removeCourse(id, courseId);
+            const res = await cohortAPI.getById(id);
+            setCohort(res?.data || null);
+        } catch (err) { console.error(err); }
+    };
+
+    // prettier-ignore
+    const addInstructorModal = showAddInstructor && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+                <div className="flex items-center justify-between p-5 border-b dark:border-gray-700">
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Add Instructor</h2>
+                    <button onClick={() => setShowAddInstructor(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><X size={20} /></button>
+                </div>
+                <div className="p-5 space-y-4">
+                    {addInstError && <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg text-sm text-red-600">{addInstError}</div>}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Instructor</label>
+                        <select
+                            value={selectedInstructor}
+                            onChange={(e) => setSelectedInstructor(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
+                        >
+                            <option value="">Choose instructor...</option>
+                            {allInstructors
+                                .filter(i => !instructors.some(ci => ci.id === i.id))
+                                .map(i => <option key={i.id} value={i.id}>{i.full_name} ({i.email})</option>)
+                            }
+                        </select>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button onClick={() => setShowAddInstructor(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm" disabled={addInstLoading}>Cancel</button>
+                        <button onClick={handleAddInstructor} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium" disabled={addInstLoading || !selectedInstructor}>
+                            {addInstLoading ? 'Adding...' : 'Add Instructor'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // prettier-ignore
+    const addCourseModal = showAddCourse && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+                <div className="flex items-center justify-between p-5 border-b dark:border-gray-700">
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Add Course to Cohort</h2>
+                    <button onClick={() => setShowAddCourse(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><X size={20} /></button>
+                </div>
+                <div className="p-5 space-y-4">
+                    {addCourseError && <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg text-sm text-red-600">{addCourseError}</div>}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Course</label>
+                        <select
+                            value={selectedCourse}
+                            onChange={(e) => setSelectedCourse(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
+                        >
+                            <option value="">Choose course...</option>
+                            {allCourses
+                                .filter(c => !courses.some(cc => cc.id === c.id))
+                                .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                            }
+                        </select>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button onClick={() => setShowAddCourse(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm" disabled={addCourseLoading}>Cancel</button>
+                        <button onClick={handleAddCourse} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium" disabled={addCourseLoading || !selectedCourse}>
+                            {addCourseLoading ? 'Adding...' : 'Add Course'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">
@@ -132,13 +269,22 @@ const CohortDetails = () => {
                         <Shield size={18} className="text-purple-500" />
                         Instructors
                         <span className="ml-auto text-xs font-normal text-gray-400">{instructors.length}</span>
+                        {hasRole('admin') && (
+                            <button
+                                onClick={() => { setShowAddInstructor(true); setAddInstError(''); setSelectedInstructor(''); }}
+                                className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                title="Add instructor"
+                            >
+                                <Plus size={14} />
+                            </button>
+                        )}
                     </h2>
                     {instructors.length === 0 ? (
                         <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">No instructors assigned</p>
                     ) : (
                         <div className="space-y-3">
                             {instructors.map(inst => (
-                                <div key={inst.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <div key={inst.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group">
                                     <Avatar name={inst.full_name || 'Unknown'} size={36} role="instructor" imageUrl={inst.avatar_url} />
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{inst.full_name || 'Unknown'}</p>
@@ -146,6 +292,15 @@ const CohortDetails = () => {
                                             <Mail size={10} />{inst.email}
                                         </p>
                                     </div>
+                                    {hasRole('admin') && (
+                                        <button
+                                            onClick={() => handleRemoveInstructor(inst.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 transition-all"
+                                            title="Remove instructor"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -184,6 +339,15 @@ const CohortDetails = () => {
                         <BookOpen size={18} className="text-primary-500" />
                         Courses
                         <span className="ml-auto text-xs font-normal text-gray-400">{courses.length}</span>
+                        {hasRole('admin') && (
+                            <button
+                                onClick={() => { setShowAddCourse(true); setAddCourseError(''); setSelectedCourse(''); }}
+                                className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                                title="Add course"
+                            >
+                                <Plus size={14} />
+                            </button>
+                        )}
                     </h2>
                     {courses.length === 0 ? (
                         <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">No courses in this cohort</p>
@@ -192,28 +356,42 @@ const CohortDetails = () => {
                             {courses.map(course => (
                                 <div
                                     key={course.id}
-                                    onClick={() => navigate(`/courses/${course.id}`)}
-                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600/50 cursor-pointer transition-colors"
+                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group"
                                 >
-                                    <div className="flex items-center gap-2.5">
+                                    <div
+                                        onClick={() => navigate(`/courses/${course.id}`)}
+                                        className="flex items-center gap-2.5 flex-1 cursor-pointer"
+                                    >
                                         <BookOpen size={16} className="text-primary-500 flex-shrink-0" />
                                         <span className="text-sm font-medium text-gray-800 dark:text-white">{course.name}</span>
                                     </div>
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                                        course.status === 'active'
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${course.status === 'active'
                                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                             : course.status === 'completed'
                                                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                                                 : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                    }`}>
-                                        {course.status}
-                                    </span>
+                                            }`}>
+                                            {course.status || 'active'}
+                                        </span>
+                                        {hasRole('admin') && (
+                                            <button
+                                                onClick={() => handleRemoveCourse(course.id)}
+                                                className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 transition-all"
+                                                title="Remove course"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
             </div>
+            {addInstructorModal}
+            {addCourseModal}
         </div>
     );
 };

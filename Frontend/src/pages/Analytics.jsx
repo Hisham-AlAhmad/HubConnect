@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { analyticsAPI } from '../services/api';
+import { analyticsAPI, cohortAPI } from '../services/api';
+import { useCohort } from '../context/CohortContext';
 import {
   BarChart,
   Bar,
@@ -13,13 +14,15 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { TrendingUp, CheckCircle, Clock, Users, Download } from 'lucide-react';
+import { TrendingUp, CheckCircle, Clock, Users, Download, ChevronDown } from 'lucide-react';
 
 /**
  * Analytics Page
  * Performance analytics and statistics (Instructor/Admin only)
  */
 const Analytics = () => {
+  const { cohorts } = useCohort();
+  const [selectedCohort, setSelectedCohort] = useState('');
   const [stats, setStats] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [rankings, setRankings] = useState([]);
@@ -28,18 +31,19 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchAnalyticsData();
-  }, []);
+  }, [selectedCohort]);
 
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
+      const params = selectedCohort ? { cohortId: selectedCohort } : {};
 
       // Fetch all analytics data in parallel
       const [statsRes, timelineRes, rankingsRes, onTimeLateRes] = await Promise.all([
-        analyticsAPI.getSubmissionStats(),
-        analyticsAPI.getSubmissionTimeline(),
-        analyticsAPI.getTeamRankings(),
-        analyticsAPI.getOnTimeLateStats()
+        analyticsAPI.getSubmissionStats(params),
+        analyticsAPI.getSubmissionTimeline(params),
+        analyticsAPI.getTeamRankings(params),
+        analyticsAPI.getOnTimeLateStats(params)
       ]);
 
       setStats(statsRes.data);
@@ -130,6 +134,18 @@ const Analytics = () => {
           <Download size={20} />
           <span>Export Report</span>
         </button>
+      </div>
+
+      {/* Cohort Filter */}
+      <div className="flex items-center gap-3">
+        <select
+          value={selectedCohort}
+          onChange={(e) => setSelectedCohort(e.target.value)}
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="">All Cohorts</option>
+          {cohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
       </div>
 
       {/* Stats Overview */}
@@ -329,10 +345,10 @@ const Analytics = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${team.score >= 90
-                          ? 'bg-green-100 text-green-800'
-                          : team.score >= 70
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                        ? 'bg-green-100 text-green-800'
+                        : team.score >= 70
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
                         }`}
                     >
                       {team.score >= 90 ? 'Excellent' : team.score >= 70 ? 'Good' : 'Needs Improvement'}

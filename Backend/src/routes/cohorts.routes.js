@@ -58,15 +58,16 @@ router.get('/:id', async (req, res, next) => {
         }
         const [cohort] = await sql`
             SELECT c.*, (
-                SELECT json_agg(json_build_object('id', p.id, 'email', p.email, 'role', uc.role, 'full_name', p.full_name, 'avatar_url', p.avatar_url))
+                SELECT json_agg(json_build_object('id', p.id, 'email', p.email, 'role', p.role, 'full_name', p.full_name, 'avatar_url', p.avatar_url))
                 FROM user_cohorts uc
                 JOIN profiles p ON p.id = uc.user_id
                 WHERE uc.cohort_id = c.id
             ) AS members,
             (
                 SELECT json_agg(json_build_object('id', cr.id, 'name', cr.name, 'status', cr.status))
-                FROM courses cr
-                WHERE cr.cohort_id = c.id
+                FROM cohort_courses cc
+                JOIN courses cr ON cr.id = cc.course_id
+                WHERE cc.cohort_id = c.id
             ) AS courses
             FROM cohorts c WHERE c.id = ${req.params.id}
         `;
@@ -110,11 +111,11 @@ router.put(
             const { name, code, startDate, endDate, isActive, academicYear } = req.body;
             const [cohort] = await sql`
                 UPDATE cohorts
-                SET name          = COALESCE(${name         ?? null}, name),
-                    code          = COALESCE(${code         ?? null}, code),
-                    start_date    = COALESCE(${startDate    ?? null}::date, start_date),
-                    end_date      = COALESCE(${endDate      ?? null}::date, end_date),
-                    is_active     = COALESCE(${isActive     ?? null}::boolean, is_active),
+                SET name          = COALESCE(${name ?? null}, name),
+                    code          = COALESCE(${code ?? null}, code),
+                    start_date    = COALESCE(${startDate ?? null}::date, start_date),
+                    end_date      = COALESCE(${endDate ?? null}::date, end_date),
+                    is_active     = COALESCE(${isActive ?? null}::boolean, is_active),
                     academic_year = COALESCE(${academicYear ?? null}, academic_year),
                     updated_at    = CURRENT_TIMESTAMP
                 WHERE id = ${req.params.id}
@@ -170,6 +171,41 @@ router.delete('/:id/instructor/:userId', authorize('admin'), async (req, res, ne
     } catch (err) { next(err); }
 });
 
+/* POST /cohorts/:id/courses — add a course to cohort */
+router.post(
+    '/:id/courses',
+    authorize('admin'),
+    [body('courseId').isUUID()],
+    validate,
+    async (req, res, next) => {
+        try {
+            const { courseId } = req.body;
+            const [cohort] = await sql`SELECT organization_id FROM cohorts WHERE id = ${req.params.id}`;
+            if (!cohort) return errorResponse(res, 'Cohort not found.', 404);
+            const [row] = await sql`
+                INSERT INTO cohort_courses (organization_id, cohort_id, course_id)
+                VALUES (${cohort.organization_id}, ${req.params.id}, ${courseId})
+                ON CONFLICT DO NOTHING
+                RETURNING *
+            `;
+            return successResponse(res, 'Course added to cohort successfully.', row ?? {}, 201);
+        } catch (err) { next(err); }
+    }
+);
+
+/* DELETE /cohorts/:id/courses/:courseId — remove a course from cohort */
+router.delete('/:id/courses/:courseId', authorize('admin'), async (req, res, next) => {
+    try {
+        const removed = await sql`
+            DELETE FROM cohort_courses
+            WHERE cohort_id = ${req.params.id} AND course_id = ${req.params.courseId}
+            RETURNING *
+        `;
+        if (!removed.length) return errorResponse(res, 'Course not found in cohort.', 404);
+        return successResponse(res, 'Course removed from cohort successfully.');
+    } catch (err) { next(err); }
+});
+
 /* ── Student management ────────────────────────────────────────────────── */
 
 /* GET /cohorts/:id/students — paginated, filterable; admin or cohort-member instructor only */
@@ -180,10 +216,10 @@ router.get('/:id/students', authorize('admin', 'instructor'), async (req, res, n
         return earlyRes;
     }
     try {
-        const page     = Math.max(1, parseInt(req.query.page  ?? '1', 10));
-        const limit    = Math.min(100, parseInt(req.query.limit ?? '20', 10));
-        const offset   = (page - 1) * limit;
-        const search   = req.query.search ?? '';
+        const page = Math.max(1, parseInt(req.query.page ?? '1', 10));
+        const limit = Math.min(100, parseInt(req.query.limit ?? '20', 10));
+        const offset = (page - 1) * limit;
+        const search = req.query.search ?? '';
 
         const [{ total }] = await sql`
             SELECT COUNT(*)::int AS total FROM user_cohorts uc

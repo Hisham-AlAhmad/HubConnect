@@ -38,16 +38,16 @@ const signToken = (payload) =>
  * `extra.cohorts` should be an array of cohort UUIDs the user belongs to.
  */
 const buildUserPayload = (profile, extra = {}) => ({
-    id:             profile.id,
-    email:          profile.email,
-    role:           profile.role,
-    name:           profile.full_name || profile.email.split('@')[0],
-    avatarUrl:      profile.avatar_url   || null,
-    phone:          profile.phone_number || null,
-    bio:            profile.bio          || null,
-    teamId:         extra.teamId         ?? null,
+    id: profile.id,
+    email: profile.email,
+    role: profile.role,
+    name: profile.full_name || profile.email.split('@')[0],
+    avatarUrl: profile.avatar_url || null,
+    phone: profile.phone_number || null,
+    bio: profile.bio || null,
+    teamId: extra.teamId ?? null,
     organizationId: extra.organizationId ?? null,
-    cohorts:        extra.cohorts        ?? [],
+    cohorts: extra.cohorts ?? [],
 });
 
 /** Fetch all cohort IDs for a given user */
@@ -84,7 +84,14 @@ const createAuthUser = async (id, email, txSql = null) => {
             await q`INSERT INTO auth.users (id, email, created_at, updated_at) VALUES (${id}, ${email}, NOW(), NOW())`;
         }
     } else {
-        await q`INSERT INTO auth.users (id, email) VALUES (${id}, ${email}) ON CONFLICT DO NOTHING`;
+        // Remove any orphaned auth.users row with the same email
+        // (no matching profile = safe to clean up)
+        await q`
+            DELETE FROM auth.users a
+            WHERE a.email = ${email}
+              AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = a.id)
+        `;
+        await q`INSERT INTO auth.users (id, email) VALUES (${id}, ${email})`;
     }
 };
 
@@ -161,7 +168,7 @@ router.post(
 
             const cohorts = await getUserCohorts(result.profile.id);
             const userPayload = buildUserPayload(result.profile, { organizationId: result.orgId, cohorts });
-            const token       = signToken(userPayload);
+            const token = signToken(userPayload);
 
             return successResponse(res, 'Registration successful.', { user: userPayload, token }, 201);
         } catch (err) {
@@ -215,8 +222,8 @@ router.post(
             ]);
 
             const userPayload = buildUserPayload(profile, {
-                teamId:         teamMember?.team_id         || null,
-                organizationId: orgUser?.organization_id    || null,
+                teamId: teamMember?.team_id || null,
+                organizationId: orgUser?.organization_id || null,
                 cohorts,
             });
             const token = signToken(userPayload);
@@ -241,8 +248,8 @@ router.get('/me', authenticate, async (req, res, next) => {
         ]);
 
         const userPayload = buildUserPayload(profile, {
-            teamId:         teamMember?.team_id         || null,
-            organizationId: orgUser?.organization_id    || null,
+            teamId: teamMember?.team_id || null,
+            organizationId: orgUser?.organization_id || null,
             cohorts,
         });
 
@@ -266,7 +273,10 @@ router.put(
         body('name').optional().trim().notEmpty(),
         body('phone').optional().trim(),
         body('bio').optional().trim(),
-        body('avatarUrl').optional().trim(),
+        body('avatarUrl').optional().trim().custom((val) => {
+            if (val && val.length > 5_000_000) throw new Error('Avatar image is too large (max 5 MB).');
+            return true;
+        }),
     ],
     validate,
     async (req, res, next) => {
@@ -274,9 +284,9 @@ router.put(
             const { name, phone, bio, avatarUrl } = req.body;
             const [profile] = await sql`
                 UPDATE profiles
-                SET full_name    = COALESCE(${name      ?? null}, full_name),
-                    phone_number = COALESCE(${phone     ?? null}, phone_number),
-                    bio          = COALESCE(${bio       ?? null}, bio),
+                SET full_name    = COALESCE(${name ?? null}, full_name),
+                    phone_number = COALESCE(${phone ?? null}, phone_number),
+                    bio          = COALESCE(${bio ?? null}, bio),
                     avatar_url   = COALESCE(${avatarUrl ?? null}, avatar_url),
                     updated_at   = CURRENT_TIMESTAMP
                 WHERE id = ${req.user.id}
@@ -325,7 +335,7 @@ router.post(
         try {
             const [profile] = await sql`SELECT id FROM profiles WHERE email = ${req.body.email} LIMIT 1`;
             if (profile) {
-                const resetToken   = crypto.randomBytes(32).toString('hex');
+                const resetToken = crypto.randomBytes(32).toString('hex');
                 const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
                 await sql`
                     UPDATE profiles

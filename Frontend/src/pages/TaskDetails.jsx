@@ -8,6 +8,7 @@ import {
   Calendar,
   Clock,
   Users,
+  Trash2,
   User,
   Github,
   Upload,
@@ -33,6 +34,8 @@ const TaskDetails = () => {
   const [allSubmissions, setAllSubmissions] = useState([]);     // all submissions (instructor/admin)
   const [loading, setLoading] = useState(true);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Per-submission grading state (keyed by submission id)
   const [gradeForms, setGradeForms] = useState({});
@@ -108,6 +111,18 @@ const TaskDetails = () => {
 
   const handleBack = () => {
     navigate('/tasks');
+  };
+
+  const handleDeleteTask = async () => {
+    try {
+      setDeleting(true);
+      await taskAPI.deleteTask(id);
+      navigate('/tasks');
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   if (loading) {
@@ -199,13 +214,24 @@ const TaskDetails = () => {
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex-1 pr-4">
               {task.title}
             </h1>
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                task.status
-              )}`}
-            >
-              {task.status.replace('_', ' ').toUpperCase()}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+                  task.status
+                )}`}
+              >
+                {task.status.replace('_', ' ').toUpperCase()}
+              </span>
+              {isStaff && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                  title="Delete task"
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Meta information */}
@@ -319,15 +345,14 @@ const TaskDetails = () => {
                           </div>
                         </div>
                         <span
-                          className={`px-2 py-1 text-xs rounded font-medium ${
-                            sub.status === 'accepted'
+                          className={`px-2 py-1 text-xs rounded font-medium ${sub.status === 'accepted'
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                               : sub.status === 'rejected'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                              : sub.status === 'revision_requested'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                          }`}
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                : sub.status === 'revision_requested'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                            }`}
                         >
                           {(sub.status || 'submitted').replace(/_/g, ' ').toUpperCase()}
                         </span>
@@ -519,13 +544,12 @@ const TaskDetails = () => {
                         <p>
                           <span className="font-medium">Status:</span>{' '}
                           <span
-                            className={`inline-block px-2 py-1 rounded ${
-                              submission.status === 'accepted'
+                            className={`inline-block px-2 py-1 rounded ${submission.status === 'accepted'
                                 ? 'bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                 : submission.status === 'rejected'
-                                ? 'bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                : 'bg-blue-200 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                            }`}
+                                  ? 'bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                  : 'bg-blue-200 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                              }`}
                           >
                             {(submission.status || 'submitted').replace(/_/g, ' ').toUpperCase()}
                           </span>
@@ -575,6 +599,43 @@ const TaskDetails = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Task</h3>
+            {allSubmissions.length > 0 ? (
+              <div className="mb-4">
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-700 dark:text-yellow-400 mb-3">
+                  <strong>Warning:</strong> This task has {allSubmissions.length} submission{allSubmissions.length > 1 ? 's' : ''}. Deleting it will remove all associated submissions and grades.
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Are you sure you want to delete &quot;{task.title}&quot;? This action cannot be undone.</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Are you sure you want to delete &quot;{task.title}&quot;? This action cannot be undone.
+              </p>
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteTask}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete Task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Submission Modal */}
       {showSubmitModal && (

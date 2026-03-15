@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { reportsAPI, teamAPI } from '../services/api';
+import { reportsAPI, teamAPI, cohortAPI } from '../services/api';
 import { ROLES } from '../utils/constants';
 import {
   BarChart,
@@ -31,7 +31,9 @@ import {
   Download,
   Users,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Filter,
+  Search
 } from 'lucide-react';
 
 const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -152,8 +154,8 @@ function StudentReportDetail() {
           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 mt-4">
             <div
               className={`h-3 rounded-full transition-all ${performanceScore >= 90 ? 'bg-green-500' :
-                  performanceScore >= 75 ? 'bg-blue-500' :
-                    performanceScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                performanceScore >= 75 ? 'bg-blue-500' :
+                  performanceScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                 }`}
               style={{ width: `${performanceScore}%` }}
             />
@@ -338,15 +340,30 @@ function StudentReportDetail() {
 function StudentReportsList() {
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
+  const [cohorts, setCohorts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [cohortFilter, setCohortFilter] = useState('all');
+  const [scoreFilter, setScoreFilter] = useState('all');
 
   useEffect(() => {
     const fetch = async () => {
       try {
         setLoading(true);
-        const res = await reportsAPI.getAllStudentsSummary();
-        setStudents(res.data);
+        const [res, cohortRes] = await Promise.all([
+          reportsAPI.getAllStudentsSummary(),
+          cohortAPI.getAll()
+        ]);
+        // Deduplicate by student id in case the API returns a student in multiple cohorts
+        const seen = new Set();
+        const unique = (res.data ?? []).filter(s => {
+          if (seen.has(s.id)) return false;
+          seen.add(s.id);
+          return true;
+        });
+        setStudents(unique);
+        setCohorts(Array.isArray(cohortRes?.data) ? cohortRes.data : []);
       } catch (err) {
         setError('Failed to load student summaries');
       } finally {
@@ -355,6 +372,16 @@ function StudentReportsList() {
     };
     fetch();
   }, []);
+
+  const filteredStudents = students.filter((s) => {
+    if (search && !(s.name ?? '').toLowerCase().includes(search.toLowerCase())) return false;
+    if (cohortFilter !== 'all' && (s.cohortName ?? '') !== cohortFilter) return false;
+    if (scoreFilter === 'excellent' && (s.performanceScore ?? 0) < 90) return false;
+    if (scoreFilter === 'good' && ((s.performanceScore ?? 0) < 75 || (s.performanceScore ?? 0) >= 90)) return false;
+    if (scoreFilter === 'average' && ((s.performanceScore ?? 0) < 60 || (s.performanceScore ?? 0) >= 75)) return false;
+    if (scoreFilter === 'low' && (s.performanceScore ?? 0) >= 60) return false;
+    return true;
+  });
 
   const getScoreBadge = (score) => {
     if (score >= 90) return 'bg-green-100 text-green-700';
@@ -385,9 +412,42 @@ function StudentReportsList() {
         </div>
       )}
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search students..."
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        </div>
+        <select
+          value={cohortFilter}
+          onChange={(e) => setCohortFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="all">All Cohorts</option>
+          {cohorts.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+        </select>
+        <select
+          value={scoreFilter}
+          onChange={(e) => setScoreFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="all">All Scores</option>
+          <option value="excellent">Excellent (90+)</option>
+          <option value="good">Good (75-89)</option>
+          <option value="average">Average (60-74)</option>
+          <option value="low">Needs Improvement (&lt;60)</option>
+        </select>
+      </div>
+
       {/* Student Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {students.map((s) => (
+        {filteredStudents.map((s) => (
           <button
             key={s.id}
             onClick={() => navigate(`/reports/student/${s.id}`)}
@@ -426,8 +486,8 @@ function StudentReportsList() {
             <div className="mt-3 w-full bg-gray-100 dark:bg-gray-600 rounded-full h-2">
               <div
                 className={`h-2 rounded-full ${s.performanceScore >= 90 ? 'bg-green-500' :
-                    s.performanceScore >= 75 ? 'bg-blue-500' :
-                      s.performanceScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                  s.performanceScore >= 75 ? 'bg-blue-500' :
+                    s.performanceScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                   }`}
                 style={{ width: `${s.performanceScore}%` }}
               />
@@ -436,7 +496,7 @@ function StudentReportsList() {
         ))}
       </div>
 
-      {students.length === 0 && !error && (
+      {filteredStudents.length === 0 && !error && (
         <div className="text-center py-16">
           <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400">No student data available</p>

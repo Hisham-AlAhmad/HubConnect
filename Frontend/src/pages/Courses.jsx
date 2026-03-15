@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCourse } from '../context/CourseContext';
 import { useCohort } from '../context/CohortContext';
+import { courseAPI } from '../services/api';
 import {
     Briefcase, Plus, Calendar, Users, CheckCircle, Clock,
-    AlertCircle, X, ChevronRight
+    AlertCircle, X, ChevronRight, Trash2
 } from 'lucide-react';
 
 /**
@@ -22,8 +23,25 @@ const Courses = () => {
     const [form, setForm] = useState({ name: '', endDate: '', cohortId: '' });
     const [error, setError] = useState('');
     const [creating, setCreating] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [deleting, setDeleting] = useState(false);
 
     const canCreate = hasRole(['admin', 'instructor']);
+
+    const handleDelete = async (courseId) => {
+        try {
+            setDeleting(true);
+            await courseAPI.delete(courseId);
+            setDeleteConfirm(null);
+            // Refresh courses from context
+            window.location.reload();
+        } catch (err) {
+            setError(err?.error || 'Failed to delete course');
+            setDeleteConfirm(null);
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     const handleCreate = async () => {
         if (!form.name.trim()) { setError('Name is required'); return; }
@@ -120,9 +138,20 @@ const Courses = () => {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-end mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium">
-                                <span>View details</span>
-                                <ChevronRight size={16} />
+                            <div className="flex items-center justify-between mt-4">
+                                {canCreate && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(course.id); }}
+                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                        title="Delete course"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
+                                <div className="flex items-center text-primary-600 dark:text-primary-400 text-sm font-medium ml-auto">
+                                    <span>View details</span>
+                                    <ChevronRight size={16} />
+                                </div>
                             </div>
                         </button>
                     ))}
@@ -193,6 +222,33 @@ const Courses = () => {
                                     {creating ? 'Creating...' : 'Create'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Course</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                            Are you sure you want to delete this course? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                                disabled={deleting}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleDelete(deleteConfirm)}
+                                disabled={deleting}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+                            >
+                                {deleting ? 'Deleting...' : 'Delete'}
+                            </button>
                         </div>
                     </div>
                 </div>

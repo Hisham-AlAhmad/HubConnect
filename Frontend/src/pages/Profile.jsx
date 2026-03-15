@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar';
 import ThemeToggle from '../components/ThemeToggle';
 import {
   User, Mail, Shield, Save, Lock, Eye, EyeOff,
-  CheckCircle, AlertCircle, Sun, Moon, Settings, Palette, Camera
+  CheckCircle, AlertCircle, Sun, Moon, Settings, Palette, Camera, Upload
 } from 'lucide-react';
 
 /**
@@ -131,8 +131,8 @@ const Profile = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-6 py-4 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === tab.id
-                      ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                     }`}
                 >
                   <span className="flex items-center gap-2"><Icon className="w-4 h-4" />{tab.label}</span>
@@ -159,20 +159,49 @@ const Profile = () => {
 
               {showAvatarInput && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <label className={labelCls}>Avatar Image URL</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={profileForm.avatarUrl}
-                      onChange={(e) => setProfileForm(p => ({ ...p, avatarUrl: e.target.value }))}
-                      placeholder="https://example.com/your-photo.jpg"
-                      className={`${inputCls} flex-1`}
-                    />
-                    <button type="button" onClick={() => setShowAvatarInput(false)} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                      Done
-                    </button>
+                  <label className={labelCls}>Profile Photo</label>
+                  <div className="flex flex-col gap-3">
+                    {/* File upload */}
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-4 py-2 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 rounded-lg cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors text-sm font-medium border border-primary-200 dark:border-primary-800">
+                        <Upload className="w-4 h-4" />
+                        Upload Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 2 * 1024 * 1024) {
+                              setProfileError('Image must be smaller than 2MB');
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              setProfileForm(p => ({ ...p, avatarUrl: ev.target.result }));
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                      </label>
+                      <span className="text-xs text-gray-400">or paste a URL below</span>
+                    </div>
+                    {/* URL input */}
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={profileForm.avatarUrl?.startsWith('data:') ? '' : profileForm.avatarUrl}
+                        onChange={(e) => setProfileForm(p => ({ ...p, avatarUrl: e.target.value }))}
+                        placeholder="https://example.com/your-photo.jpg"
+                        className={`${inputCls} flex-1`}
+                      />
+                      <button type="button" onClick={() => setShowAvatarInput(false)} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        Done
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Paste a link to your profile picture</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Upload a photo (max 2MB) or paste a link to your profile picture</p>
                 </div>
               )}
 
@@ -280,8 +309,8 @@ const Profile = () => {
                     const Icon = opt.icon;
                     return (
                       <label key={opt.value} className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors ${theme === opt.value
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                          : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                         }`}>
                         <div className="flex items-center gap-3">
                           <Icon size={20} className={theme === opt.value ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'} />

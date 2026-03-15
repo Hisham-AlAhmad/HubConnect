@@ -131,10 +131,10 @@ export const reportsAPI = {
 
 // ── ANALYTICS API ─────────────────────────────────────────────────────────────
 export const analyticsAPI = {
-  getSubmissionStats: () => instance.get('/analytics/submission-stats'),
-  getSubmissionTimeline: () => instance.get('/analytics/timeline'),
-  getTeamRankings: () => instance.get('/analytics/rankings'),
-  getOnTimeLateStats: () => instance.get('/analytics/on-time-late'),
+  getSubmissionStats: (params) => instance.get('/analytics/submission-stats', { params }),
+  getSubmissionTimeline: (params) => instance.get('/analytics/timeline', { params }),
+  getTeamRankings: (params) => instance.get('/analytics/rankings', { params }),
+  getOnTimeLateStats: (params) => instance.get('/analytics/on-time-late', { params }),
 };
 
 // ── COURSE API ────────────────────────────────────────────────────────────────
@@ -143,6 +143,7 @@ export const courseAPI = {
   getById: (id) => instance.get(`/courses/${id}`),
   create: (data) => instance.post('/courses', data),
   update: (id, data) => instance.put(`/courses/${id}`, data),
+  delete: (id) => instance.delete(`/courses/${id}`),
   finish: (id) => instance.patch(`/courses/${id}/finish`),
   // Cohort assignment (global template model)
   assignToCohort: (id, cohortId) => instance.post(`/courses/${id}/assign-cohort`, { cohortId }),
@@ -165,6 +166,9 @@ export const cohortAPI = {
   delete: (id) => instance.delete(`/cohorts/${id}`),
   assignInstructor: (id, instructorId) => instance.post(`/cohorts/${id}/instructor`, { instructorId }),
   removeInstructor: (id, userId) => instance.delete(`/cohorts/${id}/instructor/${userId}`),
+  // Course management
+  addCourse: (id, courseId) => instance.post(`/cohorts/${id}/courses`, { courseId }),
+  removeCourse: (id, courseId) => instance.delete(`/cohorts/${id}/courses/${courseId}`),
   // Student management
   getStudents: (id, params) => instance.get(`/cohorts/${id}/students`, { params }),
   addStudent: (id, studentId) => instance.post(`/cohorts/${id}/students`, { studentId }),

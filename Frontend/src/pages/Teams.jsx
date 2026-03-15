@@ -165,7 +165,7 @@ const Teams = () => {
       showMessage('Member added!');
       await fetchTeams();
       await fetchTeamMembers(selectedTeam.id);
-      teamAPI.getAllStudents().then(res => setAllStudents(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
+      refreshStudents();
     } catch (err) {
       showMessage('Failed to add member', true);
     }
@@ -178,10 +178,24 @@ const Teams = () => {
       showMessage('Member removed');
       await fetchTeams();
       await fetchTeamMembers(selectedTeam.id);
-      teamAPI.getAllStudents().then(res => setAllStudents(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
+      refreshStudents();
     } catch (err) {
       showMessage('Failed to remove member', true);
     }
+  };
+
+  const refreshStudents = (cohortId) => {
+    const params = { limit: 500 };
+    if (cohortId) params.cohortId = cohortId;
+    else if (selectedTeam?.cohort_id) params.cohortId = selectedTeam.cohort_id;
+    teamAPI.getAllStudents(params)
+      .then(res => setAllStudents(Array.isArray(res?.data) ? res.data : []))
+      .catch(() => { });
+  };
+
+  const openAddMemberModal = () => {
+    refreshStudents(selectedTeam?.cohort_id);
+    setShowAddMemberModal(true);
   };
 
   const getRoleBadge = (role) => {
@@ -197,19 +211,12 @@ const Teams = () => {
   // Unassigned students (not in any team within the same course)
   const memberUserIds = teamMembers.map(m => m.user_id);
   const unassignedStudents = allStudents.filter(s => {
+    // Already a member of this team
     if (memberUserIds.includes(s.id)) return false;
-    // If the selected team has a course, only show students not already in a team for that course
-    if (selectedTeam?.course_id) {
-      // Find all teams in the same course
-      const courseTeamIds = teams.filter(t => t.course_id === selectedTeam.course_id).map(t => t.id);
-      // Check if student is already in one of those teams
-      if (s.team_id && courseTeamIds.length > 0) {
-        // s.team_id is any team the student is in — check if it's in our course
-        const studentTeam = teams.find(t => t.id === s.team_id);
-        if (studentTeam && studentTeam.course_id === selectedTeam.course_id) return false;
-      }
-    } else {
-      if (s.team_id) return false;
+    // If the team is course-scoped, exclude students already in another team for the same course
+    if (selectedTeam?.course_id && s.team_id) {
+      const studentTeam = teams.find(t => t.id === s.team_id);
+      if (studentTeam && studentTeam.course_id === selectedTeam.course_id) return false;
     }
     return true;
   });
@@ -287,8 +294,8 @@ const Teams = () => {
                     key={team.id}
                     onClick={() => setSelectedTeam(team)}
                     className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${selectedTeam?.id === team.id
-                        ? 'bg-primary-50 border-2 border-primary-500'
-                        : 'bg-gray-50 dark:bg-gray-700 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-600'
+                      ? 'bg-primary-50 border-2 border-primary-500'
+                      : 'bg-gray-50 dark:bg-gray-700 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-600'
                       }`}
                   >
                     <div className="flex items-center space-x-3">
@@ -371,7 +378,7 @@ const Teams = () => {
                   </h3>
                   {canEdit && (
                     <button
-                      onClick={() => setShowAddMemberModal(true)}
+                      onClick={openAddMemberModal}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors font-medium"
                     >
                       <UserPlus className="w-4 h-4" />

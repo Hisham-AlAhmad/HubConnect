@@ -198,6 +198,19 @@ router.delete('/:id/assign-cohort/:cohortId', authorize('admin'), async (req, re
     } catch (err) { next(err); }
 });
 
+/* DELETE /courses/:id */
+router.delete('/:id', authorize('admin', 'instructor'), async (req, res, next) => {
+    try {
+        // Check access for instructors
+        if (!(await checkCourseAccess(req, req.params.id))) {
+            return errorResponse(res, 'Access denied to this course.', 403);
+        }
+        const [course] = await sql`DELETE FROM courses WHERE id = ${req.params.id} RETURNING id`;
+        if (!course) return errorResponse(res, 'Course not found.', 404);
+        return successResponse(res, 'Course deleted successfully.');
+    } catch (err) { next(err); }
+});
+
 /* PUT /courses/:id */
 router.put(
     '/:id',
@@ -209,10 +222,10 @@ router.put(
             const { name, description, endDate, status } = req.body;
             const [course] = await sql`
                 UPDATE courses
-                SET name        = COALESCE(${name        ?? null}, name),
+                SET name        = COALESCE(${name ?? null}, name),
                     description = COALESCE(${description ?? null}, description),
-                    end_date    = COALESCE(${endDate     ?? null}::date, end_date),
-                    status      = COALESCE(${status      ?? null}::course_status, status),
+                    end_date    = COALESCE(${endDate ?? null}::date, end_date),
+                    status      = COALESCE(${status ?? null}::course_status, status),
                     updated_at  = CURRENT_TIMESTAMP
                 WHERE id = ${req.params.id}
                 RETURNING *
@@ -453,11 +466,11 @@ router.put(
             const { title, description, priority, status, dueDate } = req.body;
             const [task] = await sql`
                 UPDATE tasks
-                SET title       = COALESCE(${title       ?? null}, title),
+                SET title       = COALESCE(${title ?? null}, title),
                     description = COALESCE(${description ?? null}, description),
-                    priority    = COALESCE(${priority    ?? null}::task_priority, priority),
-                    status      = COALESCE(${status      ?? null}::task_status, status),
-                    due_date    = COALESCE(${dueDate     ?? null}::date, due_date),
+                    priority    = COALESCE(${priority ?? null}::task_priority, priority),
+                    status      = COALESCE(${status ?? null}::task_status, status),
+                    due_date    = COALESCE(${dueDate ?? null}::date, due_date),
                     updated_at  = CURRENT_TIMESTAMP
                 WHERE id = ${req.params.taskId} AND course_id = ${req.params.id}
                 RETURNING *

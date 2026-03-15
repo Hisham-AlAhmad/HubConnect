@@ -15,12 +15,17 @@ const TaskCard = ({ task }) => {
   };
 
   const getDeadlineColor = () => {
+    if (task.status === 'accepted' || task.status === 'submitted') return 'text-green-600';
     if (daysRemaining < 0) return 'text-red-600';
     if (daysRemaining <= 3) return 'text-orange-600';
     return 'text-gray-600 dark:text-gray-400';
   };
 
   const getDeadlineText = () => {
+    if (task.status === 'accepted' || task.status === 'submitted') {
+      if (daysRemaining < 0) return `Accepted in ${Math.abs(daysRemaining)} days`;
+      return 'Submitted';
+    }
     if (daysRemaining < 0) return `${Math.abs(daysRemaining)} days overdue`;
     if (daysRemaining === 0) return 'Due today';
     if (daysRemaining === 1) return 'Due tomorrow';

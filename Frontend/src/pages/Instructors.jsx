@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { profileAPI, authAPI } from '../services/api';
+import { profileAPI, authAPI, cohortAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 import {
     Users, Search, Shield, ChevronDown, GraduationCap, BookOpen, Mail, Plus, X, Pencil, Save
@@ -31,6 +31,13 @@ const Instructors = () => {
     const [editLoading, setEditLoading] = useState(false);
     const [editError, setEditError] = useState('');
 
+    // Assign to cohort state
+    const [cohorts, setCohorts] = useState([]);
+    const [showAssign, setShowAssign] = useState(null); // instructor object
+    const [selectedCohort, setSelectedCohort] = useState('');
+    const [assignLoading, setAssignLoading] = useState(false);
+    const [assignError, setAssignError] = useState('');
+
     const fetchInstructors = async () => {
         try {
             setLoading(true);
@@ -44,7 +51,10 @@ const Instructors = () => {
         }
     };
 
-    useEffect(() => { fetchInstructors(); }, []);
+    useEffect(() => {
+        fetchInstructors();
+        cohortAPI.getAll().then(res => setCohorts(Array.isArray(res?.data) ? res.data : [])).catch(() => { });
+    }, []);
 
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
@@ -64,7 +74,7 @@ const Instructors = () => {
             setCreateForm({ name: '', password: DEFAULT_PASSWORD });
             await fetchInstructors();
         } catch (err) {
-            setError(err?.response?.data?.error || err.message || 'Failed to create instructor');
+            setError(err?.error || err?.message || 'Failed to create instructor');
         } finally {
             setCreateLoading(false);
         }
@@ -86,6 +96,42 @@ const Instructors = () => {
         });
         setShowEdit(instructor.id);
         setEditError('');
+    };
+
+    const openAssignModal = (instructor) => {
+        setShowAssign(instructor);
+        setSelectedCohort('');
+        setAssignError('');
+    };
+
+    const handleAssignCohort = async () => {
+        if (!selectedCohort) { setAssignError('Please select a cohort'); return; }
+        try {
+            setAssignLoading(true);
+            await cohortAPI.assignInstructor(selectedCohort, showAssign.id);
+            setShowAssign(null);
+            await fetchInstructors();
+        } catch (err) {
+            setAssignError(err?.error || err?.message || 'Failed to assign instructor');
+        } finally {
+            setAssignLoading(false);
+        }
+    };
+
+    const handleRemoveFromCohort = async (instructorId, cohortId) => {
+        try {
+            await cohortAPI.removeInstructor(cohortId, instructorId);
+            await fetchInstructors();
+            // Refresh modal if open
+            if (showAssign?.id === instructorId) {
+                setShowAssign(prev => ({
+                    ...prev,
+                    cohorts: (prev.cohorts || []).filter(c => c.cohort_id !== cohortId)
+                }));
+            }
+        } catch (err) {
+            console.error('Failed to remove from cohort:', err);
+        }
     };
 
     const handleEditSubmit = async (e) => {
@@ -123,9 +169,9 @@ const Instructors = () => {
             </div>
 
             <button
-                    onClick={() => { setShowCreate(true); setError(''); }}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-                >
+                onClick={() => { setShowCreate(true); setError(''); }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+            >
                 <Plus className="w-4 h-4" />
                 New Instructor
             </button>
@@ -184,6 +230,13 @@ const Instructors = () => {
                                             title="Edit instructor"
                                         >
                                             <Pencil size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => openAssignModal(instructor)}
+                                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                                            title="Assign to cohort"
+                                        >
+                                            <GraduationCap size={14} />
                                         </button>
                                     </div>
                                     {instructor.bio && (
@@ -282,6 +335,72 @@ const Instructors = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Assign to Cohort Modal */}
+            {showAssign && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+                        <div className="flex items-center justify-between p-5 border-b dark:border-gray-700">
+                            <div>
+                                <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Assign to Cohort</h2>
+                                <p className="text-sm text-gray-500 mt-0.5">{showAssign.full_name}</p>
+                            </div>
+                            <button onClick={() => setShowAssign(null)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><X size={20} /></button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            {assignError && (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600">{assignError}</div>
+                            )}
+
+                            {/* Current cohorts */}
+                            {showAssign.cohorts && showAssign.cohorts.length > 0 && (
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currently assigned to:</p>
+                                    <div className="space-y-1.5">
+                                        {showAssign.cohorts.map((c) => (
+                                            <div key={c.cohort_id} className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                                <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                                                    <GraduationCap size={14} />{c.cohort_name}
+                                                </span>
+                                                <button
+                                                    onClick={() => handleRemoveFromCohort(showAssign.id, c.cohort_id)}
+                                                    className="text-red-400 hover:text-red-600 p-0.5"
+                                                    title="Remove from cohort"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Add to new cohort */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Add to cohort</label>
+                                <select
+                                    value={selectedCohort}
+                                    onChange={(e) => setSelectedCohort(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
+                                >
+                                    <option value="">Select a cohort...</option>
+                                    {cohorts
+                                        .filter(c => !(showAssign.cohorts || []).some(ac => ac.cohort_id === c.id))
+                                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                                    }
+                                </select>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setShowAssign(null)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm" disabled={assignLoading}>Cancel</button>
+                                <button onClick={handleAssignCohort} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium" disabled={assignLoading || !selectedCohort}>
+                                    {assignLoading ? 'Assigning...' : 'Assign'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

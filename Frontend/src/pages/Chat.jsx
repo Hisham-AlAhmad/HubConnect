@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useCourse } from '../context/CourseContext';
 import ChatBox from '../components/ChatBox';
 import { chatAPI } from '../services/api';
 import Avatar from '../components/Avatar';
@@ -15,7 +14,6 @@ import { MessageSquare, Users, Globe, Briefcase, Hash, Loader, Search, ArrowLeft
  */
 const Chat = () => {
   const { user } = useAuth();
-  const { activeCourse } = useCourse();
   const [activeTab, setActiveTab] = useState('general');
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
@@ -27,6 +25,9 @@ const Chat = () => {
   const [activeDM, setActiveDM] = useState(null);       // { userId, name, avatarUrl, roomId }
   const [loadingDMRoom, setLoadingDMRoom] = useState(false);
 
+  // Course chat selector state
+  const [selectedCourseRoomId, setSelectedCourseRoomId] = useState(null);
+
   // Unread DM tracking: Set of user IDs that have unread messages
   const [unreadDMs, setUnreadDMs] = useState(new Set());
   const unreadIntervalRef = useRef(null);
@@ -37,7 +38,7 @@ const Chat = () => {
       .then((res) => {
         if (res?.success) setUnreadDMs(new Set(res.data ?? []));
       })
-      .catch(() => {});
+      .catch(() => { });
   };
 
   useEffect(() => {
@@ -56,7 +57,7 @@ const Chat = () => {
   useEffect(() => {
     chatAPI.getRooms()
       .then((res) => { if (res?.success) setRooms(res.data ?? []); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoadingRooms(false));
   }, []);
 
@@ -66,7 +67,7 @@ const Chat = () => {
       setLoadingUsers(true);
       chatAPI.getUsers()
         .then((res) => { if (res?.success) setDmUsers(res.data ?? []); })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => setLoadingUsers(false));
     }
   }, [activeTab]);
@@ -80,8 +81,8 @@ const Chat = () => {
     if (activeTab === 'general') {
       return rooms.find((r) => r.room_type === 'general')?.id ?? null;
     }
-    if (activeTab === 'course' && activeCourse) {
-      return rooms.find((r) => r.room_type === 'course' && r.course_id === activeCourse.id)?.id ?? null;
+    if (activeTab === 'course') {
+      return selectedCourseRoomId ?? null;
     }
     if (activeTab === 'team') {
       const teamId = user?.teamId;
@@ -131,9 +132,7 @@ const Chat = () => {
 
   const noRoomMessage = () => {
     if (loadingRooms) return null;
-    if (activeTab === 'course' && !activeCourse) {
-      return { title: 'No Active Course', desc: 'Join or create a course to use course chat.' };
-    }
+    if (activeTab === 'course') return null; // handled inline
     if (activeTab === 'team' && !user?.teamId) {
       return { title: 'No Team Assigned', desc: 'You need to be part of a team to access team chat.' };
     }
@@ -145,11 +144,14 @@ const Chat = () => {
 
   const msg = noRoomMessage();
 
-  // Reset DM when switching tabs
+  // Reset DM and course selection when switching tabs
   const handleTabSwitch = (tabId) => {
     setActiveTab(tabId);
     setActiveDM(null);
+    setSelectedCourseRoomId(null);
   };
+
+  const courseRooms = rooms.filter((r) => r.room_type === 'course');
 
   return (
     <div className="space-y-4">
@@ -181,11 +183,42 @@ const Chat = () => {
 
       {/* Chat area */}
       {loadingRooms ? (
-        <div className="flex items-center justify-center h-[calc(100vh-16rem)]">
-          <Loader size={32} className="animate-spin text-primary-500" />
+        <div className="flex gap-4 h-[calc(100vh-12rem)]">
+          {/* Skeleton sidebar */}
+          <div className="w-72 flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+            <div className="h-5 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                  <div className="h-2.5 w-16 bg-gray-100 dark:bg-gray-600 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Skeleton chat area */}
+          <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 flex flex-col">
+            <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4" />
+            <div className="flex-1 space-y-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+                  <div className="flex gap-2 max-w-[60%]">
+                    {i % 2 === 0 && <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse mt-auto" />}
+                    <div className="space-y-1">
+                      <div className={`h-10 rounded-2xl animate-pulse ${i % 2 === 0 ? 'w-48 bg-gray-200 dark:bg-gray-700' : 'w-36 bg-primary-200 dark:bg-primary-900/30'}`} />
+                      <div className="h-2.5 w-16 bg-gray-100 dark:bg-gray-600 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse mt-4" />
+          </div>
         </div>
       ) : msg ? (
-        <div className="flex items-center justify-center h-[calc(100vh-16rem)]">
+        <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
           <div className="text-center">
             <Users size={64} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{msg.title}</h2>
@@ -194,7 +227,7 @@ const Chat = () => {
         </div>
       ) : activeTab === 'general' ? (
         /* General tab: user list sidebar + chat */
-        <div className="flex gap-4 h-[calc(100vh-16rem)]">
+        <div className="flex gap-4 h-[calc(100vh-12rem)]">
           {/* User list sidebar */}
           <div className="w-72 flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg shadow-soft border border-gray-200 dark:border-gray-700 flex flex-col">
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -218,11 +251,10 @@ const Chat = () => {
             {/* General chat button */}
             <button
               onClick={backToGeneral}
-              className={`flex items-center gap-3 px-4 py-3 text-sm w-full text-left transition-colors border-b border-gray-100 dark:border-gray-700 ${
-                !activeDM
-                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              className={`flex items-center gap-3 px-4 py-3 text-sm w-full text-left transition-colors border-b border-gray-100 dark:border-gray-700 ${!activeDM
+                ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/50 flex items-center justify-center">
                 <Globe size={16} className="text-primary-600 dark:text-primary-400" />
@@ -249,11 +281,10 @@ const Chat = () => {
                     key={u.id}
                     onClick={() => openDM(u)}
                     disabled={loadingDMRoom}
-                    className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                      activeDM?.userId === u.id
-                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 ${activeDM?.userId === u.id
+                      ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300'
+                      }`}
                   >
                     <div className="relative">
                       <Avatar name={u.full_name || 'U'} imageUrl={u.avatar_url} size={32} />
@@ -302,8 +333,74 @@ const Chat = () => {
             )}
           </div>
         </div>
+      ) : activeTab === 'course' ? (
+        <div className="flex gap-4 h-[calc(100vh-12rem)]">
+          {/* Course list sidebar */}
+          <div className="w-72 flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg shadow-soft border border-gray-200 dark:border-gray-700 flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                <Briefcase size={16} />
+                Courses
+              </h3>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {courseRooms.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  No course chat rooms available
+                </div>
+              ) : (
+                courseRooms.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedCourseRoomId(r.id)}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm w-full text-left transition-colors ${selectedCourseRoomId === r.id
+                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center flex-shrink-0">
+                      <Briefcase size={16} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="truncate">
+                      <p className="font-medium truncate">{r.course_name || r.room_name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Course Chat</p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          {/* Chat area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {selectedCourseRoomId ? (
+              <>
+                <div className="flex items-center gap-2 mb-2 px-2">
+                  <button
+                    onClick={() => setSelectedCourseRoomId(null)}
+                    className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <span className="font-medium text-gray-800 dark:text-white text-sm">
+                    {courseRooms.find((r) => r.id === selectedCourseRoomId)?.course_name || 'Course Chat'}
+                  </span>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <ChatBox key={selectedCourseRoomId} roomId={selectedCourseRoomId} />
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-center">
+                <div>
+                  <Briefcase size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">Select a course to start chatting</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
-        <div className="h-[calc(100vh-16rem)]">
+        <div className="h-[calc(100vh-12rem)]">
           <ChatBox key={roomId} roomId={roomId} />
         </div>
       )}

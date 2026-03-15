@@ -6,6 +6,7 @@ import {
   submissionAPI,
   analyticsAPI,
   teamAPI,
+  cohortAPI,
   checkInAPI,
   reportsAPI,
 } from '../services/api';
@@ -83,12 +84,12 @@ const TaskItem = ({ task, onClick }) => (
       <h3 className="font-medium text-gray-800 dark:text-white flex-1 pr-2">{task.title}</h3>
       <span
         className={`px-2 py-1 rounded text-xs font-medium ${task.status === 'submitted'
-            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-            : task.status === 'in_progress'
-              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-              : task.status === 'late'
-                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+          : task.status === 'in_progress'
+            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+            : task.status === 'late'
+              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
           }`}
       >
         {task.status.replace('_', ' ')}
@@ -111,16 +112,16 @@ const AdminDashboard = ({ user }) => {
   useEffect(() => {
     (async () => {
       try {
-        const [subStats, teams, students, submissions, rankings] = await Promise.all([
+        const [subStats, cohorts, students, submissions, rankings] = await Promise.all([
           analyticsAPI.getSubmissionStats(),
-          teamAPI.getAllTeams(),
+          cohortAPI.getAll(),
           teamAPI.getAllStudents(),
           submissionAPI.getAllSubmissions(),
           analyticsAPI.getTeamRankings(),
         ]);
         setStats({
           totalStudents: students.data.length,
-          totalTeams: teams.data.length,
+          totalCohorts: (cohorts.data ?? []).length,
           totalTasks: subStats.data.totalTasks,
           submissionRate: subStats.data.submissionRate,
           totalSubmissions: subStats.data.submittedTasks,
@@ -140,7 +141,7 @@ const AdminDashboard = ({ user }) => {
 
   const statCards = [
     { title: 'Total Students', value: stats.totalStudents, icon: GraduationCap, bgColor: 'bg-blue-50', textColor: 'text-blue-600' },
-    { title: 'Total Teams', value: stats.totalTeams, icon: Users, bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
+    { title: 'Total Cohorts', value: stats.totalCohorts, icon: Users, bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
     { title: 'Total Tasks', value: stats.totalTasks, icon: ListTodo, bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { title: 'Submission Rate', value: `${stats.submissionRate}%`, icon: TrendingUp, bgColor: 'bg-green-50', textColor: 'text-green-600' },
   ];
